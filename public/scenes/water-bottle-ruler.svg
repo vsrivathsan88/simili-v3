@@ -1,0 +1,27 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="300" fill="#f8f9fa"/>
+  
+  <!-- Title -->
+  <text x="200" y="30" text-anchor="middle" font-family="Arial" font-size="18" fill="#333">Water Bottle &amp; Ruler</text>
+  
+  <!-- Water bottle -->
+  <rect x="160" y="60" width="40" height="160" fill="#87CEEB" stroke="#4682B4" stroke-width="2" rx="5"/>
+  <rect x="165" y="65" width="30" height="150" fill="#B0E0E6"/>
+  
+  <!-- Bottle cap -->
+  <rect x="170" y="50" width="20" height="15" fill="#4682B4" rx="3"/>
+  
+  <!-- Ruler -->
+  <rect x="220" y="60" width="15" height="160" fill="#FFD700" stroke="#DAA520" stroke-width="1"/>
+  
+  <!-- Ruler notches -->
+  <line x1="220" y1="60" x2="230" y2="60" stroke="#333" stroke-width="2"/>
+  <line x1="220" y1="92" x2="227" y2="92" stroke="#333" stroke-width="1"/>
+  <line x1="220" y1="124" x2="230" y2="124" stroke="#333" stroke-width="2"/>
+  <line x1="220" y1="156" x2="227" y2="156" stroke="#333" stroke-width="1"/>
+  <line x1="220" y1="188" x2="227" y2="188" stroke="#333" stroke-width="1"/>
+  <line x1="220" y1="220" x2="230" y2="220" stroke="#333" stroke-width="2"/>
+  
+  <!-- Instructions -->
+  <text x="200" y="250" text-anchor="middle" font-family="Arial" font-size="14" fill="#666">Choose your unit. Show 1/5 of bottle height.</text>
+</svg>

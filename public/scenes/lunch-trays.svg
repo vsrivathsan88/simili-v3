@@ -1,0 +1,21 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="300" fill="#f8f9fa"/>
+  
+  <!-- Title -->
+  <text x="200" y="30" text-anchor="middle" font-family="Arial" font-size="18" fill="#333">4 Lunch Trays - Find Equal Parts</text>
+  
+  <!-- Trays -->
+  <rect x="20" y="80" width="80" height="60" fill="#8B4513" stroke="#654321" stroke-width="2"/>
+  <rect x="110" y="80" width="80" height="60" fill="#8B4513" stroke="#654321" stroke-width="2"/>
+  <rect x="200" y="80" width="80" height="60" fill="#8B4513" stroke="#654321" stroke-width="2"/>
+  <rect x="290" y="80" width="80" height="60" fill="#8B4513" stroke="#654321" stroke-width="2"/>
+  
+  <!-- Compartments in first tray -->
+  <rect x="25" y="85" width="25" height="25" fill="#90EE90"/>
+  <rect x="55" y="85" width="25" height="25" fill="#FFB347"/>
+  <rect x="25" y="115" width="25" height="20" fill="#87CEEB"/>
+  <rect x="55" y="115" width="25" height="20" fill="#DDA0DD"/>
+  
+  <!-- Instructions -->
+  <text x="200" y="180" text-anchor="middle" font-family="Arial" font-size="14" fill="#666">Pick a whole you'll use. Mark one equal part.</text>
+</svg>

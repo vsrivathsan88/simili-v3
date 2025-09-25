@@ -1,0 +1,31 @@
+---
+alwaysApply: false
+---
+name: Gemini Live – Native Audio WS
+description: Connect via WebSocket; never expose long-lived API keys; match sample format to model spec.
+globs: ["src/live/**/*", "server/**/*"]
+priority: 2
+---
+
+# Connection model
+- The **browser** opens a WebSocket to Gemini Live for low-latency audio I/O.
+- **Never** ship a static API key to the browser. Use `/server/session` to mint a **short-lived client token** or to proxy.
+- Put all model/voice params behind a `GenAILiveClient` wrapper with reconnect + backoff.
+
+# Audio format
+- **Match the model’s required sample rate + encoding** (PCM16 LE frames). Keep a single source of truth in `audio/config.ts`.
+- Stream mic frames upstream; stream synthesized audio frames downstream to the playback worklet.
+
+# Events & tools
+- Handle server events: response deltas, tool-call requests, tool-results, and TTS chunks.
+- On tool-request, call the local tool registry, validate inputs, then send a tool-result event.
+
+# Minimal server contract
+- `/session` → returns `wsUrl` or a signed token the browser uses to open the Live API WS.
+- Ensure CORS to your origin only; **strip credentials** from logs.
+
+# Failure & UX
+- Backoff on 1006/1011 close codes; show toast and allow manual retry.
+- Expose a network indicator in the control tray.
+
+- **DO** Only use "gemini-2.5-flash-native-audio-preview-09-2025" as the default model.

@@ -1,0 +1,35 @@
+---
+alwaysApply: true
+---
+# Goals (answer first)
+- **Low-latency, voice-first** sandbox integrating Gemini Live native audio over WebSocket.
+- **Buildless ESM** using an `importmap` + `esm.sh` CDN; no bundler required.
+- **Main-thread stays light**; heavy audio runs in AudioWorklets.
+- **State via Zustand** with small selectors; no prop-drilling.
+- **Tool/function-calling** uses JSON-schema (zod) and a client “tools registry.”
+
+# Non-goals
+- No server rendering or Node bundling.
+- No shipping secrets to the browser. Never embed long-lived API keys.
+
+# Project structure (expected)
+- `/public/index.html`  (importmap + root)
+- `/src/` components, hooks, state slices
+- `/src/audio/` worklets, recorder/streamer
+- `/src/live/` GenAI Live client (WS)
+- `/src/tools/` tool schemas + registry
+- `/src/styles/` CSS
+- `/server/` tiny token/relay endpoint (for dev+prod)
+
+# Coding standards
+- TypeScript strict; prefer `zod` for runtime validation.
+- Small, pure React components; suspense-free MVP.
+- Accessibility first: transcript region is `role="log"`; buttons have ARIA labels.
+
+# Agent DO / DON’T
+- **DO** use import maps + ESM URLs, not npm install.
+- **DO** create AudioWorklets for mic processing + playback.
+- **DON’T** block the main thread for audio encode/decode.
+- **DON’T** reference `process.env` in browser code. Use `/server` for ephemeral tokens.
+- **DON'T** use any hardcoded stuff as fall backs.
+- **DO** Flag issues to the user, who is a product manager and use non-technical language while explaining technical terms.

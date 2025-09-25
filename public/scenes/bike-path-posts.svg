@@ -1,0 +1,27 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="300" fill="#f8f9fa"/>
+  
+  <!-- Title -->
+  <text x="200" y="30" text-anchor="middle" font-family="Arial" font-size="18" fill="#333">Bike Path - Mark 1/4 Mile</text>
+  
+  <!-- Path -->
+  <rect x="0" y="140" width="400" height="20" fill="#696969"/>
+  <rect x="0" y="145" width="400" height="10" fill="#808080"/>
+  
+  <!-- Posts -->
+  <rect x="46" y="120" width="8" height="40" fill="#8B4513"/>
+  <rect x="121" y="120" width="8" height="40" fill="#8B4513"/>
+  <rect x="196" y="120" width="8" height="40" fill="#8B4513"/>
+  <rect x="271" y="120" width="8" height="40" fill="#8B4513"/>
+  <rect x="346" y="120" width="8" height="40" fill="#8B4513"/>
+  
+  <!-- Mile markers -->
+  <text x="50" y="115" text-anchor="middle" font-family="Arial" font-size="16" font-weight="bold" fill="#333">0</text>
+  <text x="350" y="115" text-anchor="middle" font-family="Arial" font-size="16" font-weight="bold" fill="#333">1</text>
+  
+  <!-- Grass -->
+  <rect x="0" y="160" width="400" height="40" fill="#90EE90"/>
+  
+  <!-- Instructions -->
+  <text x="200" y="230" text-anchor="middle" font-family="Arial" font-size="14" fill="#666">Mark 1/4 mile on a number line matching photo spacing</text>
+</svg>

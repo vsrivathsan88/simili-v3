@@ -1,0 +1,7 @@
+{
+  "name": "simili-v2",
+  "description": "attempt to use native audio functional call sandbox for simili",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

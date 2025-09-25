@@ -1,0 +1,46 @@
+[
+  {
+    "id": "lunch-trays",
+    "title": "Lunch Trays",
+    "description": "Photo of 4 identical trays; one tray has veggie sections. Pick a whole you'll use. Mark one equal part on your canvas.",
+    "image": "/scenes/lunch-trays.svg",
+    "prompts": [
+      "Pick a **whole** you'll use.",
+      "Mark one **equal part** on your canvas.",
+      "How do you know the parts are equal?"
+    ]
+  },
+  {
+    "id": "water-bottle-ruler",
+    "title": "Water Bottle Ruler",
+    "description": "Photo of a bottle next to a notched sticker (no numbers). Choose your unit. Show 1/5 of the bottle height.",
+    "image": "/scenes/water-bottle-ruler.svg",
+    "prompts": [
+      "Choose your **unit**.",
+      "Show **1/5** of the bottle height.",
+      "Justify how you partitioned."
+    ]
+  },
+  {
+    "id": "bike-path-posts",
+    "title": "Bike Path Posts",
+    "description": "Posts between 0 and 1 mile markers. Mark 1/4 mile on a drawn number line that matches the photo spacing.",
+    "image": "/scenes/bike-path-posts.svg",
+    "prompts": [
+      "Mark **1/4** mile on a drawn number line.",
+      "Match the photo spacing.",
+      "Why are your spaces equal?"
+    ]
+  },
+  {
+    "id": "tile-mosaic",
+    "title": "Tile Mosaic",
+    "description": "Uneven tile sizes. Can these tiles represent equal parts? If not, redraw your own equal partition.",
+    "image": "/scenes/tile-mosaic.svg",
+    "prompts": [
+      "Can these tiles represent **equal parts**?",
+      "If not, redraw your own equal partition.",
+      "What's your whole?"
+    ]
+  }
+]
