@@ -30,7 +30,7 @@ export type LiveAPIProviderProps = {
 export const LiveAPIProvider: FC<LiveAPIProviderProps> = ({
   children,
 }) => {
-  const liveAPI = useLiveApi({});
+  const liveAPI = useLiveApi();
 
   return (
     <LiveAPIContext.Provider value={liveAPI}>

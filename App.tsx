@@ -20,6 +20,7 @@
 
 import { useState } from 'react';
 import ControlTray from './components/console/control-tray/ControlTray';
+import AvatarControlTray from './components/lesson/AvatarControlTray';
 import ErrorScreen from './components/demo/ErrorScreen';
 import StreamingConsole from './components/demo/streaming-console/StreamingConsole';
 import LessonLayout from './components/lesson/LessonLayout';
@@ -114,14 +115,9 @@ function App() {
             <div className="lesson-controls" style={{
               margin: '0 20px 20px 20px',
               display: 'flex',
-              justifyContent: 'center',
-              background: 'rgba(255, 255, 255, 0.2)',
-              borderRadius: '16px',
-              padding: '20px',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255, 255, 255, 0.3)'
+              justifyContent: 'center'
             }}>
-              <ControlTray></ControlTray>
+              <AvatarControlTray />
             </div>
           </div>
         )}

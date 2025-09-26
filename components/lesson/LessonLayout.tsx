@@ -7,6 +7,9 @@ import React, { useState, useEffect } from 'react';
 import { Tldraw } from 'tldraw';
 import 'tldraw/tldraw.css';
 import './LessonLayout.css';
+import { useLiveAPIContext } from '../../contexts/LiveAPIContext';
+import { useSettings, useTools, useLogStore } from '@/lib/state';
+import { Modality } from '@google/genai';
 
 interface Scene {
   id: string;
@@ -24,6 +27,13 @@ export default function LessonLayout({ onSceneChange }: LessonLayoutProps) {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [currentScene, setCurrentScene] = useState<Scene | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showTranscript, setShowTranscript] = useState(false);
+
+  // Live API wiring (same as console): provide config from settings + tools
+  const { setConfig } = useLiveAPIContext();
+  const { systemPrompt, voice } = useSettings();
+  const { tools } = useTools();
+  const turns = useLogStore(state => state.turns);
 
   useEffect(() => {
     // Load available scenes
@@ -39,6 +49,40 @@ export default function LessonLayout({ onSceneChange }: LessonLayoutProps) {
         setLoading(false);
       });
   }, []);
+
+  // Mirror console config: audio modality, voice, systemPrompt, tools
+  useEffect(() => {
+    const enabledTools = tools
+      .filter(tool => tool.isEnabled)
+      .map(tool => ({
+        functionDeclarations: [
+          {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.parameters,
+          },
+        ],
+      }));
+
+    const config: any = {
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: {
+            voiceName: voice,
+          },
+        },
+      },
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
+      systemInstruction: {
+        parts: [{ text: systemPrompt }],
+      },
+      tools: enabledTools,
+    };
+
+    setConfig(config);
+  }, [setConfig, systemPrompt, tools, voice]);
 
   useEffect(() => {
     onSceneChange?.(currentScene);
@@ -56,6 +100,14 @@ export default function LessonLayout({ onSceneChange }: LessonLayoutProps) {
     <div className="lesson-layout">
       <div className="lesson-header">
         <h1>Simili</h1>
+        <button
+          className="transcript-toggle"
+          onClick={() => setShowTranscript(v => !v)}
+          aria-expanded={showTranscript}
+          aria-controls="transcript-panel"
+        >
+          Transcript
+        </button>
       </div>
       <div className="lesson-content">
         {/* Left Container - Scene Image */}
@@ -110,6 +162,33 @@ export default function LessonLayout({ onSceneChange }: LessonLayoutProps) {
           </div>
         </div>
       </div>
+
+      {/* Teacher transcript side panel (collapsible) */}
+      <aside
+        id="transcript-panel"
+        className={`transcript-panel ${showTranscript ? 'open' : ''}`}
+        role="log"
+        aria-live="polite"
+      >
+        <div className="transcript-header">Session Transcript</div>
+        <div className="transcript-body">
+          {turns.length === 0 ? (
+            <div className="transcript-empty">No transcript yet.</div>
+          ) : (
+            <ul className="transcript-list">
+              {turns.map((t, idx) => (
+                <li key={idx} className={`turn ${t.role}`}>
+                  <div className="meta">
+                    <span className="role">{t.role}</span>
+                    <span className="time">{t.timestamp.toLocaleTimeString()}</span>
+                  </div>
+                  <div className="text">{t.text}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </aside>
     </div>
   );
 }

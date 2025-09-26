@@ -2,11 +2,18 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  /* Clean paper-like base */
+  background: #ffffff;
+  /* Fun SVG doodles overlay */
   background-image: 
-    radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 177, 153, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, rgba(120, 219, 226, 0.2) 0%, transparent 50%);
+    url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3C!-- Heart --%3E%3Cpath d='M50,25 C50,15 35,15 35,25 C35,15 20,15 20,25 C20,40 50,60 50,60 C50,60 80,40 80,25 C80,15 65,15 65,25 C65,15 50,15 50,25 Z' fill='%23ff69b4' opacity='0.15'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg width='120' height='120' xmlns='http://www.w3.org/2000/svg'%3E%3C!-- Pizza slice --%3E%3Cpath d='M60,20 L30,80 L90,80 Z' fill='%23ffa500' opacity='0.12'/%3E%3Ccircle cx='50' cy='50' r='3' fill='%23ff0000' opacity='0.2'/%3E%3Ccircle cx='70' cy='60' r='2' fill='%23228b22' opacity='0.2'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg width='80' height='80' xmlns='http://www.w3.org/2000/svg'%3E%3C!-- Game console --%3E%3Crect x='15' y='25' width='50' height='30' rx='5' fill='%236a5acd' opacity='0.15'/%3E%3Ccircle cx='25' cy='35' r='3' fill='%23fff' opacity='0.3'/%3E%3Ccircle cx='55' cy='35' r='3' fill='%23fff' opacity='0.3'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg width='90' height='90' xmlns='http://www.w3.org/2000/svg'%3E%3C!-- Video player --%3E%3Crect x='20' y='25' width='50' height='35' rx='3' fill='%2320b2aa' opacity='0.12'/%3E%3Cpolygon points='35,35 35,50 50,42.5' fill='%23fff' opacity='0.4'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg width='110' height='110' xmlns='http://www.w3.org/2000/svg'%3E%3C!-- Star --%3E%3Cpath d='M55,15 L60,35 L80,35 L65,50 L70,70 L55,60 L40,70 L45,50 L30,35 L50,35 Z' fill='%23ffd700' opacity='0.1'/%3E%3C/svg%3E");
+  background-size: 200px 200px, 150px 150px, 250px 250px;
+  background-position: 0 0, 100px 50px, 50px 100px;
+  background-repeat: repeat;
   font-family: 'Atkinson Hyperlegible', sans-serif;
 }
 
@@ -53,6 +60,19 @@
   font-weight: 700;
   color: white;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.lesson-header .transcript-toggle {
+  position: absolute;
+  right: 24px;
+  top: 18px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  color: #374151;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .lesson-content {
@@ -105,6 +125,61 @@
   flex: 1;
   position: relative;
   min-height: 0;
+}
+
+/* Collapsible teacher transcript panel */
+.transcript-panel {
+  position: fixed;
+  top: 0;
+  right: -360px;
+  width: 340px;
+  height: 100vh;
+  background: #ffffff;
+  border-left: 1px solid #e5e7eb;
+  box-shadow: -6px 0 24px rgba(0,0,0,0.08);
+  transition: right 180ms ease-in-out;
+  display: flex;
+  flex-direction: column;
+}
+
+.transcript-panel.open {
+  right: 0;
+}
+
+.transcript-header {
+  padding: 16px 16px;
+  font-weight: 700;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.transcript-body {
+  padding: 12px 16px;
+  overflow-y: auto;
+}
+
+.transcript-empty {
+  color: #6b7280;
+}
+
+.transcript-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.turn .meta {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.turn .text {
+  white-space: pre-wrap;
+  color: #111827;
 }
 
 .canvas-container > div {

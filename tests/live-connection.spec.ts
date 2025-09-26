@@ -2,9 +2,11 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Live Connection Tests', () => {
   test.beforeEach(async ({ page }) => {
+    // Attach listeners BEFORE navigation to catch early requests
+    page.on('request', () => {});
+    page.on('websocket', () => {});
     // Navigate to the app
     await page.goto('http://localhost:3000');
-    
     // Wait for the app to load
     await page.waitForSelector('.mode-toggle');
   });
@@ -19,8 +21,11 @@ test.describe('Live Connection Tests', () => {
     // Check if scene picker is visible
     await expect(page.locator('.scene-picker')).toBeVisible();
     
-    // Check if mic button is visible
-    await expect(page.locator('button.mic-button, button[title*="microphone"]').first()).toBeVisible();
+    // Check if avatar control tray is visible
+    await expect(page.locator('.avatar-control-tray').first()).toBeVisible();
+    
+    // Check if student avatar button is visible
+    await expect(page.locator('.avatar-button').first()).toBeVisible();
     
     // Monitor console errors
     const consoleErrors: string[] = [];
@@ -35,17 +40,23 @@ test.describe('Live Connection Tests', () => {
     page.on('request', request => {
       networkRequests.push(`${request.method()} ${request.url()}`);
     });
+    const websockets: string[] = [];
+    page.on('websocket', ws => {
+      websockets.push(ws.url());
+    });
     
-    // Try to click the mic button
-    const micButton = page.locator('button.mic-button, button[title*="microphone"]').first();
-    await micButton.click();
-    
-    // Wait a bit for connection attempt
-    await page.waitForTimeout(2000);
-    
-    // Check if token request was made
-    const tokenRequest = networkRequests.find(req => req.includes('/token'));
-    console.log('Token request:', tokenRequest);
+    // Try to click the student avatar (mic button)
+    const avatarButton = page.locator('.avatar-button').first();
+    await avatarButton.click();
+
+    // Wait up to 7s for either token request or a websocket open
+    await page.waitForTimeout(7000);
+
+    const tokenReq = networkRequests.find(req => req.includes('/token'));
+    const liveWs = websockets.find(url => url.includes('generativelanguage') || url.startsWith('ws') || url.startsWith('wss'));
+    console.log('Lesson: token request:', tokenReq);
+    console.log('Lesson: websocket URLs:', websockets);
+    expect(Boolean(tokenReq) || Boolean(liveWs), 'Should attempt token or open a websocket in lesson').toBeTruthy();
     
     // Log all console errors
     console.log('Console errors:', consoleErrors);
