@@ -63,16 +63,22 @@ export default function AvatarControlTray({ micVolume = 0, agentVolume = 0 }: Av
     };
   }, [connected, client, muted, audioRecorder]);
 
-  const handleStudentAvatarClick = async () => {
+  const handleConnectClick = async () => {
     if (!connected) {
       try {
         await connect();
       } catch (error) {
         console.error('Connect failed:', error);
       }
-    } else {
-      setMuted(!muted);
     }
+  };
+
+  const handleDisconnectClick = () => {
+    disconnect();
+  };
+
+  const handleMuteToggle = () => {
+    setMuted(!muted);
   };
 
   const handleExportLogs = () => {
@@ -131,20 +137,18 @@ export default function AvatarControlTray({ micVolume = 0, agentVolume = 0 }: Av
     <div className="avatar-control-tray">
       {/* Student Avatar */}
       <div className="avatar-container student">
-        <button
-          className={`avatar-button ${connected ? 'connected' : 'disconnected'} ${muted ? 'muted' : ''}`}
-          onClick={handleStudentAvatarClick}
-          aria-label={connected ? (muted ? 'Unmute microphone' : 'Mute microphone') : 'Click to connect and start talking'}
+        <div
+          className={`avatar-display ${connected ? 'connected' : 'disconnected'} ${muted ? 'muted' : ''}`}
           style={{ '--volume': micVolume } as React.CSSProperties}
         >
           <div className="avatar-emoji">🧒</div>
           <div className="pulse-ring"></div>
-          {!connected && (
-            <div className="connect-hint">
-              <span>Click to Connect</span>
+          {muted && connected && (
+            <div className="muted-indicator">
+              <span>🔇</span>
             </div>
           )}
-        </button>
+        </div>
         <div className="avatar-label">You</div>
         <div className="waveform">
           {Array.from({ length: 8 }, (_, i) => (
@@ -167,6 +171,39 @@ export default function AvatarControlTray({ micVolume = 0, agentVolume = 0 }: Av
           <span className="status-text">{getStatusText()}</span>
         </div>
         
+        {/* Phone Call Style Controls */}
+        <div className="call-controls">
+          {!connected ? (
+            <button
+              className="call-button connect"
+              onClick={handleConnectClick}
+              aria-label="Connect to start conversation"
+              title="Connect"
+            >
+              <span className="call-icon">📞</span>
+            </button>
+          ) : (
+            <div className="connected-controls">
+              <button
+                className={`call-button mute ${muted ? 'active' : ''}`}
+                onClick={handleMuteToggle}
+                aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}
+                title={muted ? 'Unmute' : 'Mute'}
+              >
+                <span className="call-icon">{muted ? '🔇' : '🎤'}</span>
+              </button>
+              <button
+                className="call-button disconnect"
+                onClick={handleDisconnectClick}
+                aria-label="End conversation"
+                title="Hang Up"
+              >
+                <span className="call-icon">📵</span>
+              </button>
+            </div>
+          )}
+        </div>
+        
         <div className="connection-status">
           {connected ? (
             <div className="connected-badge">
@@ -176,7 +213,7 @@ export default function AvatarControlTray({ micVolume = 0, agentVolume = 0 }: Av
           ) : (
             <div className="connecting-badge">
               <div className="spinner"></div>
-              <span>Connecting...</span>
+              <span>Ready to Connect</span>
             </div>
           )}
         </div>

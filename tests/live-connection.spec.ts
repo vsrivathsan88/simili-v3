@@ -24,8 +24,8 @@ test.describe('Live Connection Tests', () => {
     // Check if avatar control tray is visible
     await expect(page.locator('.avatar-control-tray').first()).toBeVisible();
     
-    // Check if student avatar button is visible
-    await expect(page.locator('.avatar-button').first()).toBeVisible();
+    // Check if student avatar display is visible
+    await expect(page.locator('.avatar-display').first()).toBeVisible();
     
     // Monitor console errors
     const consoleErrors: string[] = [];
@@ -45,9 +45,9 @@ test.describe('Live Connection Tests', () => {
       websockets.push(ws.url());
     });
     
-    // Try to click the student avatar (mic button)
-    const avatarButton = page.locator('.avatar-button').first();
-    await avatarButton.click();
+    // Try to click the connect button (phone call style)
+    const connectButton = page.locator('.call-button.connect').first();
+    await connectButton.click();
 
     // Wait up to 7s for either token request or a websocket open
     await page.waitForTimeout(7000);
