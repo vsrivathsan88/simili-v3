@@ -1,9 +1,114 @@
 [
   {
+    "id": "sheet-pan-fourths",
+    "title": "Sheet Pan Fourths",
+    "description": "A rectangular sheet pan divided by straight lines into four equal rectangular sections. One section is covered with brown paper.",
+    "image": "/scenes/IMG04.png",
+    "representation": "area",
+    "fraction": "1/4",
+    "equal_partitions": true,
+    "milestone_fit": ["M0", "M1"],
+    "targets_misconceptions": ["M1", "M2"],
+    "prompts": [
+      "What do you notice about how this pan is divided?",
+      "How would you describe each section?",
+      "What makes you think the sections are equal or not equal?"
+    ],
+    "reasoning_notes": "Valid to name 1/4 because parts cover the whole with no gaps/overlaps and are equal in area."
+  },
+  {
+    "id": "two-bottles-half",
+    "title": "Two Bottles at Half",
+    "description": "Two different-sized bottles, each filled with liquid to exactly half their height. The bottles have different volumes.",
+    "image": "/scenes/IMG01.png",
+    "representation": "area",
+    "fraction": "1/2",
+    "equal_partitions": true,
+    "milestone_fit": ["M0", "M1"],
+    "targets_misconceptions": ["M1"],
+    "prompts": [
+      "What do you notice about the liquid in each bottle?",
+      "How would you describe the filled part compared to each bottle?",
+      "Both show half—what's the same about them and what's different?"
+    ],
+    "reasoning_notes": "Same fraction name (1/2) but different absolute amounts because wholes differ."
+  },
+  {
+    "id": "two-posters-fourths",
+    "title": "Two Posters with One Fourth",
+    "description": "Two rectangular posters of different sizes. Each has faint fold lines creating four equal rectangles, with one rectangle covered on each poster.",
+    "image": "/scenes/IMG02.png",
+    "representation": "area",
+    "fraction": "1/4",
+    "equal_partitions": true,
+    "milestone_fit": ["M0", "M1", "M2"],
+    "targets_misconceptions": ["M1", "M9"],
+    "prompts": [
+      "What do you see on each poster?",
+      "How are the covered parts similar or different?",
+      "Can we compare the covered parts on the two posters?"
+    ],
+    "reasoning_notes": "Valid to name 1/4 on each poster; NOT valid to compare amounts unless wholes are rescaled."
+  },
+  {
+    "id": "garden-bed-unequal",
+    "title": "Garden Bed (Non-Example)",
+    "description": "A rectangular garden bed with rope lines creating four regions of visibly different sizes. One region is marked or covered.",
+    "image": "/scenes/IMG03.png",
+    "representation": "area",
+    "fraction": "Not well-defined",
+    "equal_partitions": false,
+    "milestone_fit": ["M1"],
+    "targets_misconceptions": ["M2"],
+    "prompts": [
+      "What do you notice about the sections in this garden?",
+      "Are all the sections the same size?",
+      "Could we call one section 'one fourth' of the garden? Why or why not?"
+    ],
+    "reasoning_notes": "Do not name 1/4; partitions must be equal in area for fractional language to apply. This is a productive non-example."
+  },
+  {
+    "id": "lunch-tray-two-fourths",
+    "title": "Lunch Tray with Two Fourths",
+    "description": "A lunch tray with four equal compartments. Two compartments contain identical rolls; two compartments are empty.",
+    "image": "/scenes/IMG06.png",
+    "representation": "set",
+    "fraction": "2/4",
+    "equal_partitions": true,
+    "milestone_fit": ["M2", "M3"],
+    "targets_misconceptions": ["M5", "M6"],
+    "prompts": [
+      "What do you notice about this tray?",
+      "How would you describe the parts that have food?",
+      "What do the numbers in a fraction tell us about this tray?"
+    ],
+    "reasoning_notes": "Denominator is total compartments (4); numerator counts occupied compartments. Good for a/b > 1/b."
+  },
+  {
+    "id": "battery-icon",
+    "title": "Battery Icon",
+    "description": "A battery icon showing internal bars of equal size. Some bars are filled (selected), others are empty.",
+    "image": "/scenes/IMG05.png",
+    "representation": "set/area",
+    "fraction": "3/7",
+    "equal_partitions": true,
+    "milestone_fit": ["M3", "M4"],
+    "targets_misconceptions": ["M11", "M15"],
+    "prompts": [
+      "What do you notice about the bars in this battery?",
+      "How would you describe what's filled compared to the whole battery?",
+      "What would a completely full battery look like? A completely empty one?"
+    ],
+    "reasoning_notes": "b/b would represent fully filled (1); 0/b represents empty (0). Good for edge cases."
+  },
+  {
     "id": "lunch-trays",
-    "title": "Lunch Trays",
+    "title": "Lunch Trays (Multiple Wholes)",
     "description": "Photo of 4 identical trays; one tray has veggie sections. Pick a whole you'll use. Mark one equal part on your canvas.",
     "image": "/scenes/lunch-trays.svg",
+    "representation": "area",
+    "milestone_fit": ["M0", "M1"],
+    "targets_misconceptions": ["M1"],
     "prompts": [
       "Pick a **whole** you'll use.",
       "Mark one **equal part** on your canvas.",
@@ -15,6 +120,9 @@
     "title": "Water Bottle Ruler",
     "description": "Photo of a bottle next to a notched sticker (no numbers). Choose your unit. Show 1/5 of the bottle height.",
     "image": "/scenes/water-bottle-ruler.svg",
+    "representation": "area",
+    "fraction": "1/5",
+    "milestone_fit": ["M1", "M2"],
     "prompts": [
       "Choose your **unit**.",
       "Show **1/5** of the bottle height.",
@@ -26,6 +134,9 @@
     "title": "Bike Path Posts",
     "description": "Posts between 0 and 1 mile markers. Mark 1/4 mile on a drawn number line that matches the photo spacing.",
     "image": "/scenes/bike-path-posts.svg",
+    "representation": "number line",
+    "fraction": "1/4",
+    "milestone_fit": ["M2", "M3"],
     "prompts": [
       "Mark **1/4** mile on a drawn number line.",
       "Match the photo spacing.",
@@ -37,6 +148,10 @@
     "title": "Tile Mosaic",
     "description": "Uneven tile sizes. Can these tiles represent equal parts? If not, redraw your own equal partition.",
     "image": "/scenes/tile-mosaic.svg",
+    "representation": "area",
+    "equal_partitions": false,
+    "milestone_fit": ["M1"],
+    "targets_misconceptions": ["M2"],
     "prompts": [
       "Can these tiles represent **equal parts**?",
       "If not, redraw your own equal partition.",

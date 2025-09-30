@@ -5,18 +5,16 @@ test.describe('Live Connection Tests', () => {
     // Attach listeners BEFORE navigation to catch early requests
     page.on('request', () => {});
     page.on('websocket', () => {});
-    // Navigate to the app
+    // Navigate to the app (now goes directly to lesson mode)
     await page.goto('http://localhost:3000');
-    // Wait for the app to load
-    await page.waitForSelector('.mode-toggle');
+    // Wait for lesson layout to load
+    await page.waitForSelector('.lesson-layout', { timeout: 10000 });
   });
 
   test('should load lesson mode and check live connection', async ({ page }) => {
-    // Switch to lesson mode
-    await page.click('button:has-text("Lesson")');
-    
-    // Wait for lesson layout to load
-    await page.waitForSelector('.lesson-layout');
+    // Lesson mode is now the default view
+    // Wait for lesson layout to be visible
+    await expect(page.locator('.lesson-layout')).toBeVisible();
     
     // Check if scene picker is visible
     await expect(page.locator('.scene-picker')).toBeVisible();
@@ -46,8 +44,14 @@ test.describe('Live Connection Tests', () => {
     });
     
     // Try to click the connect button (phone call style)
+    // Force click because the button has a bounce animation
     const connectButton = page.locator('.call-button.connect').first();
-    await connectButton.click();
+    await connectButton.click({ force: true });
+
+    // Wait for and accept the permission modal
+    const startButton = page.locator('button:has-text("Start! 🚀")');
+    await startButton.waitFor({ timeout: 3000 });
+    await startButton.click();
 
     // Wait up to 7s for either token request or a websocket open
     await page.waitForTimeout(7000);
@@ -99,34 +103,19 @@ test.describe('Live Connection Tests', () => {
     expect(responseBody.token).toBeDefined();
   });
 
-  test('should test console mode connection', async ({ page }) => {
-    // Switch to console mode
-    await page.click('button:has-text("Console")');
+  test('should be able to open dialogue view', async ({ page }) => {
+    // Check if dialogue toggle button is present
+    await expect(page.locator('.dialogue-toggle')).toBeVisible();
     
-    // Wait for console layout
-    await page.waitForSelector('.streaming-console');
+    // Click to open dialogue view
+    await page.click('.dialogue-toggle');
     
-    // Monitor errors
-    const consoleErrors: string[] = [];
-    page.on('console', msg => {
-      if (msg.type() === 'error') {
-        consoleErrors.push(msg.text());
-      }
-    });
+    // Wait for dialogue panel to be visible
+    await page.waitForSelector('.dialogue-panel.open', { timeout: 2000 });
     
-    // Try to connect in console mode
-    const micButton = page.locator('button.mic-button, button[title*="microphone"]').first();
-    await micButton.click();
+    // Check if dialogue panel is visible
+    await expect(page.locator('.dialogue-panel')).toBeVisible();
     
-    await page.waitForTimeout(2000);
-    
-    console.log('Console mode errors:', consoleErrors);
-    
-    // Check if console mode has fewer errors
-    const hasWebSocketError = consoleErrors.some(error => 
-      error.includes('WebSocket') || error.includes('CLOSING') || error.includes('CLOSED')
-    );
-    
-    console.log('Console mode WebSocket errors:', hasWebSocketError);
+    console.log('Dialogue view opened successfully');
   });
 });

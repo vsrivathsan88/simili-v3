@@ -6,19 +6,22 @@ import { create } from 'zustand';
 import { customerSupportTools } from './tools/customer-support';
 import { personalAssistantTools } from './tools/personal-assistant';
 import { navigationSystemTools } from './tools/navigation-system';
+import { lessonTutorTools } from './tools/lesson-tutor';
 
-export type Template = 'customer-support' | 'personal-assistant' | 'navigation-system';
+export type Template = 'customer-support' | 'personal-assistant' | 'navigation-system' | 'lesson-tutor';
 
 const toolsets: Record<Template, FunctionCall[]> = {
   'customer-support': customerSupportTools,
   'personal-assistant': personalAssistantTools,
   'navigation-system': navigationSystemTools,
+  'lesson-tutor': lessonTutorTools,
 };
 
 const systemPrompts: Record<Template, string> = {
   'customer-support': 'You are a helpful and friendly customer support agent. Be conversational and concise.',
   'personal-assistant': 'You are a helpful and friendly personal assistant. Be proactive and efficient.',
   'navigation-system': 'You are a helpful and friendly navigation assistant. Provide clear and accurate directions.',
+  'lesson-tutor': 'You are Pi, a Socratic tutor for 3rd grade fractions. Use focusing questions to guide discovery.',
 };
 import { DEFAULT_LIVE_API_MODEL, DEFAULT_VOICE } from './constants';
 import {
@@ -183,4 +186,115 @@ export const useLogStore = create<{
     });
   },
   clearTurns: () => set({ turns: [] }),
+}));
+
+/**
+ * Scene Management for Lesson
+ */
+export interface Scene {
+  id: string;
+  title: string;
+  description: string;
+  image: string;
+  representation?: string;
+  fraction?: string;
+  equal_partitions?: boolean;
+  milestone_fit?: string[];
+  targets_misconceptions?: string[];
+  prompts: string[];
+  reasoning_notes?: string;
+}
+
+export const useSceneStore = create<{
+  currentSceneId: string | null;
+  availableScenes: Scene[];
+  setCurrentScene: (sceneId: string) => void;
+  loadScenes: (scenes: Scene[]) => void;
+  getCurrentScene: () => Scene | null;
+}>((set, get) => ({
+  currentSceneId: null,
+  availableScenes: [],
+  setCurrentScene: (sceneId: string) => {
+    const scene = get().availableScenes.find(s => s.id === sceneId);
+    if (scene) {
+      set({ currentSceneId: sceneId });
+      // Log the scene change
+      useLogStore.getState().addTurn({
+        role: 'system',
+        text: `Scene changed to: **${scene.title}**\n${scene.description}`,
+        isFinal: true,
+      });
+    }
+  },
+  loadScenes: (scenes: Scene[]) => {
+    set({ availableScenes: scenes });
+    // Set first scene as default if none selected
+    if (!get().currentSceneId && scenes.length > 0) {
+      set({ currentSceneId: scenes[0].id });
+    }
+  },
+  getCurrentScene: () => {
+    const { currentSceneId, availableScenes } = get();
+    return availableScenes.find(s => s.id === currentSceneId) || null;
+  },
+}));
+
+/**
+ * Milestone Progress Tracking for 3.NF.A.1
+ */
+export type MilestoneId = 'M0' | 'M1' | 'M2' | 'M3' | 'M4';
+
+export interface MilestoneProgress {
+  id: MilestoneId;
+  name: string;
+  achieved: boolean;
+  achievedAt?: Date;
+}
+
+export const useMilestoneStore = create<{
+  milestones: MilestoneProgress[];
+  achieveMilestone: (id: MilestoneId) => void;
+  resetProgress: () => void;
+  getAchievedCount: () => number;
+}>((set, get) => ({
+  milestones: [
+    { id: 'M0', name: 'Anchor the Whole', achieved: false },
+    { id: 'M1', name: 'Equal Parts', achieved: false },
+    { id: 'M2', name: 'Unit Fraction 1/b', achieved: false },
+    { id: 'M3', name: 'Compose a/b', achieved: false },
+    { id: 'M4', name: 'Edge Cases', achieved: false },
+  ],
+  achieveMilestone: (id: MilestoneId) => {
+    set(state => ({
+      milestones: state.milestones.map(m =>
+        m.id === id && !m.achieved
+          ? { ...m, achieved: true, achievedAt: new Date() }
+          : m
+      ),
+    }));
+    
+    // Log the achievement
+    const milestone = get().milestones.find(m => m.id === id);
+    if (milestone) {
+      useLogStore.getState().addTurn({
+        role: 'system',
+        text: `🎉 Milestone Achieved: **${milestone.name}** (${id})`,
+        isFinal: true,
+      });
+    }
+  },
+  resetProgress: () => {
+    set({
+      milestones: [
+        { id: 'M0', name: 'Anchor the Whole', achieved: false },
+        { id: 'M1', name: 'Equal Parts', achieved: false },
+        { id: 'M2', name: 'Unit Fraction 1/b', achieved: false },
+        { id: 'M3', name: 'Compose a/b', achieved: false },
+        { id: 'M4', name: 'Edge Cases', achieved: false },
+      ],
+    });
+  },
+  getAchievedCount: () => {
+    return get().milestones.filter(m => m.achieved).length;
+  },
 }));

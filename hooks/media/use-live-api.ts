@@ -24,7 +24,7 @@ import { LiveConnectConfig, Modality, LiveServerToolCall } from '@google/genai';
 import { AudioStreamer } from '../../lib/audio-streamer';
 import { audioContext } from '../../lib/utils';
 import VolMeterWorket from '../../lib/worklets/vol-meter';
-import { useLogStore, useSettings } from '@/lib/state';
+import { useLogStore, useSettings, useSceneStore } from '@/lib/state';
 
 export type UseLiveApiResults = {
   client: GenAILiveClient;
@@ -46,57 +46,9 @@ export function useLiveApi(): UseLiveApiResults {
 
   const [volume, setVolume] = useState(0);
   const [connected, setConnected] = useState(false);
+  // Initial empty config - will be populated by LessonLayout with actual system prompt
   const [config, setConfig] = useState<LiveConnectConfig>({
     responseModalities: ['AUDIO'],
-    systemInstruction: `You are Pi, a real-time voice Socratic tutor specializing in 3rd grade fractions (3.NF.A.1). You help students discover mathematical understanding through guided conversation, never giving direct answers.
-
-## Learning Goals (Sequential Progression)
-Guide students through these three sequential learning objectives:
-
-### Phase 1: Equal Parts (Foundation)
-- Help students understand that fractions represent equal-sized parts of a whole
-- Guide them to recognize when shapes are divided into equal vs. unequal parts
-- Use visual scenes to have them observe, describe, and justify equal partitioning
-
-### Phase 2: Unit Fractions (Building Blocks) 
-- Once equal parts are solid, introduce unit fractions (1/2, 1/3, 1/4, etc.)
-- Help them understand that unit fractions represent "one piece" of the equal parts
-- Connect the bottom number to "how many equal parts total"
-
-### Phase 3: Fraction Notation (Representation)
-- After unit fraction concepts are clear, work on reading and writing fraction symbols
-- Connect the visual (what they see) to the notation (how we write it)
-
-## Teaching Approach
-- Use FOCUSING questions (open/exploratory): "What do you notice?" "How would you describe this?"
-- NEVER use FUNNELING questions (direct/leading): "How many parts?" "What's the answer?"
-- Don't give direct answers - guide discovery through their observations
-- Use simple, everyday language (avoid "denominator," "numerator" initially)
-- Celebrate thinking process, not just correct answers
-
-## Visual Resources
-Reference these scenes the student can see:
-- bike-path-posts.svg - Posts along a path (equal spacing)
-- lunch-trays.svg - Divided lunch trays (equal parts of rectangles)  
-- tile-mosaic.svg - Tile patterns (equal parts in arrangements)
-- water-bottle-ruler.svg - Measurement contexts (equal units)
-
-## Misconception Response
-When students show confusion:
-1. Ask "What makes you think that?" to elicit their reasoning
-2. Use the reference image they can see to address the confusion
-3. Guide discovery with focusing questions
-4. Don't introduce new examples - work with what they have
-
-## Voice & Tone
-- Warm and encouraging for 3rd graders
-- Use short, clear sentences
-- Ask one question at a time
-- Use "I wonder..." and "What do you think..." frequently
-- Celebrate observations: "That's a great thing to notice!"
-- Be patient with mistakes - they're learning opportunities
-
-Keep responses brief (5-8 seconds) and conversational. Always start by asking what they notice about the visual scene.`,
   });
 
   // register audio for streaming server -> speakers
@@ -119,18 +71,49 @@ Keep responses brief (5-8 seconds) and conversational. Always start by asking wh
   }, [audioStreamerRef]);
 
   // Fetch token and initialize client
+  // Initialize once on mount with initial token
   useEffect(() => {
     (async () => {
       try {
+        console.log('[CLIENT] Fetching initial token from server...');
         const res = await fetch('http://localhost:3001/token', {
           method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
         });
-        if (!res.ok) throw new Error(`Token fetch failed: ${res.status}`);
-        const { token } = await res.json();
-        if (!token) throw new Error('No token returned');
-        setClient(new GenAILiveClient(token, model));
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`Token fetch failed (${res.status}): ${errorText}`);
+        }
+        
+        const data = await res.json();
+        console.log('[CLIENT] Token response:', {
+          hasToken: !!data.token,
+          isFallback: data.fallback,
+          isEphemeral: data.ephemeral,
+        });
+        
+        if (!data.token) {
+          throw new Error('No token returned from server');
+        }
+        
+        if (data.fallback) {
+          console.warn('[CLIENT] Using API key fallback - not ephemeral token');
+        }
+        
+        // Initialize client with v1alpha for Live API support
+        const newClient = new GenAILiveClient(data.token, model, { apiVersion: 'v1alpha' });
+        setClient(newClient);
+        console.log('[CLIENT] GenAI Live client initialized successfully');
       } catch (e) {
-        console.error('Ephemeral token fetch failed', e);
+        console.error('[CLIENT] Failed to initialize Live API client:', e);
+        // Log additional debugging info
+        if (e instanceof Error) {
+          console.error('[CLIENT] Error details:', e.message);
+          console.error('[CLIENT] Error stack:', e.stack);
+        }
       }
     })();
   }, [model]);
@@ -139,11 +122,32 @@ Keep responses brief (5-8 seconds) and conversational. Always start by asking wh
   useEffect(() => {
 
     const onOpen = () => {
+      console.log('[LiveAPI] Connection opened successfully');
       setConnected(true);
     };
+    
+    const onSetupComplete = () => {
+      console.log('[LiveAPI] Setup complete - triggering initial greeting');
+      // CRITICAL FIX: Send initial message to trigger Gemini's auto-greeting
+      // Gemini Live needs a trigger to start the conversation
+      // Send empty text with turnComplete to let Gemini know it can start
+      setTimeout(() => {
+        client.send([{ text: '' }], true);
+        console.log('[LiveAPI] Initial trigger sent, Gemini should now greet');
+      }, 100);
+    };
 
-    const onClose = () => {
+    const onClose = (event?: any) => {
+      console.warn('[LiveAPI] Connection closed', event ? {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean
+      } : 'no event data');
       setConnected(false);
+    };
+
+    const onError = (error: any) => {
+      console.error('[LiveAPI] Connection error:', error);
     };
 
     const stopAudioStreamer = () => {
@@ -152,15 +156,26 @@ Keep responses brief (5-8 seconds) and conversational. Always start by asking wh
       }
     };
 
-    const onAudio = (data: ArrayBuffer) => {
+    const onAudio = async (data: ArrayBuffer) => {
       if (audioStreamerRef.current) {
+        // CRITICAL FIX: Ensure audio context is resumed before playing
+        try {
+          await audioStreamerRef.current.resume();
+        } catch (err) {
+          console.warn('[Audio] Failed to resume audio context:', err);
+        }
         audioStreamerRef.current.addPCM16(new Uint8Array(data));
+        console.log('[Audio] Received audio data from Gemini:', data.byteLength, 'bytes');
+      } else {
+        console.error('[Audio] No audio streamer available to play audio');
       }
     };
 
     // Bind event listeners
     client.on('open', onOpen);
     client.on('close', onClose);
+    client.on('error', onError);
+    client.on('setupcomplete', onSetupComplete);
     client.on('interrupted', stopAudioStreamer);
     client.on('audio', onAudio);
 
@@ -178,11 +193,46 @@ Keep responses brief (5-8 seconds) and conversational. Always start by asking wh
           isFinal: true,
         });
 
+        // Execute tool-specific logic
+        let responseData: any = { result: 'ok' };
+
+        if (fc.name === 'switch_scene') {
+          const sceneId = fc.args?.scene_id;
+          const reason = fc.args?.reason;
+          
+          if (sceneId) {
+            const sceneStore = useSceneStore.getState();
+            const targetScene = sceneStore.availableScenes.find(s => s.id === sceneId);
+            
+            if (targetScene) {
+              sceneStore.setCurrentScene(sceneId);
+              responseData = {
+                result: 'success',
+                scene_id: sceneId,
+                scene_title: targetScene.title,
+                scene_description: targetScene.description,
+                reason: reason || 'Scene switched',
+              };
+            } else {
+              responseData = {
+                result: 'error',
+                message: `Scene with id "${sceneId}" not found`,
+                available_scenes: sceneStore.availableScenes.map(s => s.id),
+              };
+            }
+          } else {
+            responseData = {
+              result: 'error',
+              message: 'scene_id parameter is required',
+            };
+          }
+        }
+
         // Prepare the response
         functionResponses.push({
           id: fc.id,
           name: fc.name,
-          response: { result: 'ok' }, // simple, hard-coded function response
+          response: responseData,
         });
       }
 
@@ -209,6 +259,8 @@ Keep responses brief (5-8 seconds) and conversational. Always start by asking wh
       // Clean up event listeners
       client.off('open', onOpen);
       client.off('close', onClose);
+      client.off('error', onError);
+      client.off('setupcomplete', onSetupComplete);
       client.off('interrupted', stopAudioStreamer);
       client.off('audio', onAudio);
       client.off('toolcall', onToolCall);
@@ -219,9 +271,47 @@ Keep responses brief (5-8 seconds) and conversational. Always start by asking wh
     if (!config) {
       throw new Error('config has not been set');
     }
-    client.disconnect();
-    await client.connect(config);
-  }, [client, config]);
+    
+    // CRITICAL FIX: Get fresh token before each connection attempt
+    console.log('[CLIENT] Fetching fresh token before connecting...');
+    try {
+      const res = await fetch('http://localhost:3001/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Token fetch failed (${res.status}): ${errorText}`);
+      }
+      
+      const data = await res.json();
+      console.log('[CLIENT] Fresh token received:', {
+        hasToken: !!data.token,
+        isFallback: data.fallback,
+        isEphemeral: data.ephemeral,
+      });
+      
+      if (!data.token) {
+        throw new Error('No token returned from server');
+      }
+      
+      // Create new client with fresh token
+      const freshClient = new GenAILiveClient(data.token, model, { apiVersion: 'v1alpha' });
+      setClient(freshClient);
+      console.log('[CLIENT] New client created with fresh token');
+      
+      // Disconnect old client and connect with new one
+      client.disconnect();
+      await freshClient.connect(config);
+      console.log('[CLIENT] Connected successfully with fresh token');
+    } catch (error) {
+      console.error('[CLIENT] Failed to connect with fresh token:', error);
+      throw error;
+    }
+  }, [client, config, model]);
 
   const disconnect = useCallback(async () => {
     client.disconnect();
