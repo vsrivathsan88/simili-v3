@@ -101,6 +101,16 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
     }
 
     this._status = 'connecting';
+    
+    // CRITICAL DEBUG: Log the config we're sending
+    console.log('[LiveClient] Connecting with config:', JSON.stringify({
+      model: this.model,
+      responseModalities: config.responseModalities,
+      hasSpeechConfig: !!config.speechConfig,
+      hasSystemInstruction: !!config.systemInstruction,
+      toolsCount: (config as any).tools?.length || 0,
+    }, null, 2));
+    
     const callbacks: LiveCallbacks = {
       onopen: this.onOpen.bind(this),
       onmessage: this.onMessage.bind(this),
@@ -199,7 +209,11 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
   }
 
   protected onMessage(message: LiveServerMessage) {
+    // CRITICAL DEBUG: Log ALL incoming messages
+    console.log('[LiveClient] Received message:', JSON.stringify(Object.keys(message), null, 2));
+    
     if (message.setupComplete) {
+      console.log('[LiveClient] ✅ Setup complete event received!');
       this.emit('setupcomplete');
       return;
     }
@@ -223,6 +237,7 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
       }
 
       if (serverContent.inputTranscription) {
+        console.log('[LiveClient] 🎤 User spoke:', serverContent.inputTranscription.text, 'isFinal:', (serverContent.inputTranscription as any).isFinal);
         this.emit(
           'inputTranscription',
           serverContent.inputTranscription.text,
@@ -233,6 +248,9 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
           'server.inputTranscription',
           serverContent.inputTranscription.text,
         );
+      } else if (serverContent.modelTurn || serverContent.turnComplete) {
+        // Log if we get a response without seeing input transcription
+        console.log('[LiveClient] ⚠️  Server responding but NO input transcription detected');
       }
 
       if (serverContent.outputTranscription) {
@@ -250,6 +268,7 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
 
       if (serverContent.modelTurn) {
         let parts: Part[] = serverContent.modelTurn.parts || [];
+        console.log('[LiveClient] Received modelTurn with', parts.length, 'parts');
 
         const audioParts = parts.filter(p =>
           p.inlineData?.mimeType?.startsWith('audio/pcm'),
@@ -257,9 +276,12 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
         const base64s = audioParts.map(p => p.inlineData?.data);
         const otherParts = difference(parts, audioParts);
 
+        console.log('[LiveClient] Audio parts:', audioParts.length, 'Other parts:', otherParts.length);
+
         base64s.forEach(b64 => {
           if (b64) {
             const data = base64ToArrayBuffer(b64);
+            console.log('[LiveClient] Emitting audio event with', data.byteLength, 'bytes');
             this.emit('audio', data);
             this.log(`server.audio`, `buffer (${data.byteLength})`);
           }

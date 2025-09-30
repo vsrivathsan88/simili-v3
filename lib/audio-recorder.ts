@@ -61,9 +61,32 @@ export class AudioRecorder {
     }
 
     this.starting = new Promise(async (resolve, reject) => {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      this.audioContext = await audioContext({ sampleRate: this.sampleRate });
-      this.source = this.audioContext.createMediaStreamSource(this.stream);
+      try {
+        this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // CRITICAL FIX: Validate stream before using it
+        if (!this.stream || !(this.stream instanceof MediaStream)) {
+          throw new Error('Failed to get valid MediaStream from getUserMedia');
+        }
+        
+        console.log('[AudioRecorder] Got microphone stream:', this.stream.getTracks().length, 'tracks');
+        
+        this.audioContext = await audioContext({ sampleRate: this.sampleRate });
+        
+        // CRITICAL FIX: Validate audio context
+        if (!this.audioContext) {
+          throw new Error('Failed to create AudioContext');
+        }
+        
+        console.log('[AudioRecorder] Audio context created, state:', this.audioContext.state);
+        
+        this.source = this.audioContext.createMediaStreamSource(this.stream);
+        console.log('[AudioRecorder] Media stream source created successfully');
+      } catch (error) {
+        console.error('[AudioRecorder] Failed to initialize audio input:', error);
+        reject(error);
+        return;
+      }
 
       const workletName = 'audio-recorder-worklet';
       const src = createWorketFromSrc(workletName, AudioRecordingWorklet);

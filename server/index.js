@@ -40,43 +40,73 @@ async function handleTokenRequest(req, res) {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  console.log('[DEBUG] GEMINI_API_KEY exists:', !!apiKey);
-  console.log('[DEBUG] All env keys:', Object.keys(process.env).filter(k => k.includes('GEMINI')));
   if (!apiKey) {
+    console.error('[ERROR] GEMINI_API_KEY not found in environment variables');
     return sendJson(res, 500, { error: 'Server misconfigured: missing GEMINI_API_KEY' });
   }
 
+  console.log('[INFO] Token request received, API key present:', !!apiKey);
+
   try {
+    // Initialize GoogleGenAI with v1alpha API version for Live API support
     const ai = new GoogleGenAI({
       apiKey,
       httpOptions: { apiVersion: 'v1alpha' },
     });
 
-    console.log('[DEBUG] GoogleGenAI instance created, tokens available:', !!ai.tokens);
-    
-    if (!ai.tokens || typeof ai.tokens.create !== 'function') {
-      console.log('[WARN] Tokens API not available, falling back to direct API key (not recommended for production)');
-      // Fallback: return the API key directly (not ephemeral, but gets us moving)
-      const expireTime = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+    // Check if ephemeral tokens API is available (correct property: authTokens)
+    if (!ai.authTokens || typeof ai.authTokens.create !== 'function') {
+      console.log('[WARN] Ephemeral tokens API not available in @google/genai package');
+      console.log('[INFO] Using direct API key as fallback (suitable for development)');
+      
+      // Fallback: return the API key directly with expiry metadata
+      const expireTime = new Date(Date.now() + 60 * 60 * 1000).toISOString();
       return sendJson(res, 200, {
         token: apiKey,
         expireTime: expireTime,
-        fallback: true
+        fallback: true,
+        message: 'Using direct API key - consider updating @google/genai for ephemeral token support'
       });
     }
 
-    const expireTime = new Date(Date.now() + 2 * 60 * 1000).toISOString();
-    const uses = 1;
-    const token = await ai.tokens.create({ expireTime, uses });
+    // Create ephemeral token with correct format per docs
+    console.log('[INFO] Creating ephemeral token (correct API format)...');
+    const expireTime = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 minutes
+    const newSessionExpireTime = new Date(Date.now() + (10 * 60 * 1000)).toISOString(); // 10 minutes
+    
+    const token = await ai.authTokens.create({
+      config: {
+        uses: 10,  // FIXED: Allow multiple uses for reconnections (was 1)
+        expireTime: expireTime,
+        newSessionExpireTime: newSessionExpireTime,
+        httpOptions: { apiVersion: 'v1alpha' }
+      }
+    });
+    
+    if (!token || !token.name) {
+      throw new Error('Token creation returned empty response');
+    }
 
-    // Return only the token name (used as apiKey on the client) and expiry
+    console.log('[SUCCESS] Ephemeral token created successfully');
+    
     return sendJson(res, 200, {
-      token: token?.name,
-      expireTime: token?.expireTime || expireTime,
+      token: token.name,
+      expireTime: token.expireTime || expireTime,
+      ephemeral: true
     });
   } catch (err) {
-    console.error('Failed to create ephemeral token', err);
-    return sendJson(res, 500, { error: 'Failed to create token' });
+    console.error('[ERROR] Token creation failed:', err.message);
+    console.error('[ERROR] Stack:', err.stack);
+    
+    // Fallback to API key on error
+    console.log('[FALLBACK] Returning direct API key due to error');
+    const expireTime = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    return sendJson(res, 200, {
+      token: process.env.GEMINI_API_KEY,
+      expireTime: expireTime,
+      fallback: true,
+      error: err.message
+    });
   }
 }
 

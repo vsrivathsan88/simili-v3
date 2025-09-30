@@ -104,10 +104,12 @@ export class AudioStreamer {
   }
 
   addPCM16(chunk: Uint8Array) {
+    console.log('[AudioStreamer] Received PCM16 chunk:', chunk.length, 'bytes');
     // Reset the stream complete flag when a new chunk is added.
     this.isStreamComplete = false;
     // Process the chunk into a Float32Array
     let processingBuffer = this._processPCM16Chunk(chunk);
+    console.log('[AudioStreamer] Processed to', processingBuffer.length, 'float32 samples');
     // Add the processed buffer to the queue if it's larger than the buffer size.
     // This is to ensure that the buffer is not too large.
     while (processingBuffer.length >= this.bufferSize) {
@@ -119,8 +121,10 @@ export class AudioStreamer {
     if (processingBuffer.length > 0) {
       this.audioQueue.push(processingBuffer);
     }
+    console.log('[AudioStreamer] Queue size:', this.audioQueue.length, 'buffers, isPlaying:', this.isPlaying);
     // Start playing if not already playing.
     if (!this.isPlaying) {
+      console.log('[AudioStreamer] Starting playback, context state:', this.context.state);
       this.isPlaying = true;
       // Initialize scheduledTime only when we start playing
       this.scheduledTime = this.context.currentTime + this.initialBufferTime;
