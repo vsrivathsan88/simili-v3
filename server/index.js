@@ -127,6 +127,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[server] listening on http://localhost:${PORT}`);
+  console.log(`[server] Gemini ephemeral token endpoint: /token`);
 });
 
 

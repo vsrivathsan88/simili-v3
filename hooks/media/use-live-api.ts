@@ -26,6 +26,8 @@ import { audioContext } from '../../lib/utils';
 import VolMeterWorket from '../../lib/worklets/vol-meter';
 import { useLogStore, useSettings, useSceneStore } from '@/lib/state';
 
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
+
 export type UseLiveApiResults = {
   client: GenAILiveClient;
   setConfig: (config: LiveConnectConfig) => void;
@@ -34,6 +36,8 @@ export type UseLiveApiResults = {
   connect: () => Promise<void>;
   disconnect: () => void;
   connected: boolean;
+  connectionStatus: ConnectionStatus;
+  connectionError: string | null;
 
   volume: number;
 };
@@ -43,13 +47,23 @@ export function useLiveApi(): UseLiveApiResults {
   const [client, setClient] = useState<GenAILiveClient>(() => new GenAILiveClient('temp', model));
 
   const audioStreamerRef = useRef<AudioStreamer | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const isManualDisconnectRef = useRef(false);
+  const lastHeartbeatRef = useRef<number>(Date.now());
 
   const [volume, setVolume] = useState(0);
   const [connected, setConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  
   // Initial empty config - will be populated by LessonLayout with actual system prompt
   const [config, setConfig] = useState<LiveConnectConfig>({
     responseModalities: ['AUDIO'],
   });
+
+  const MAX_RECONNECT_ATTEMPTS = 5;
+  const RECONNECT_DELAY_MS = 2000;
 
   // register audio for streaming server -> speakers
   useEffect(() => {
@@ -118,12 +132,51 @@ export function useLiveApi(): UseLiveApiResults {
     })();
   }, [model]);
 
+  // Auto-reconnect function
+  const attemptReconnect = useCallback(async () => {
+    if (isManualDisconnectRef.current) {
+      console.log('[LiveAPI] Manual disconnect - skipping reconnect');
+      return;
+    }
+
+    if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      console.error('[LiveAPI] Max reconnection attempts reached');
+      setConnectionStatus('error');
+      setConnectionError('Failed to reconnect after multiple attempts');
+      return;
+    }
+
+    reconnectAttemptsRef.current += 1;
+    console.log(`[LiveAPI] Reconnection attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS}`);
+    setConnectionStatus('reconnecting');
+    setConnectionError(`Reconnecting... (attempt ${reconnectAttemptsRef.current})`);
+
+    reconnectTimeoutRef.current = setTimeout(async () => {
+      try {
+        if (!config) {
+          throw new Error('No config available for reconnection');
+        }
+        await connect();
+        console.log('[LiveAPI] ✅ Reconnection successful');
+        reconnectAttemptsRef.current = 0;
+        setConnectionError(null);
+      } catch (error) {
+        console.error('[LiveAPI] Reconnection failed:', error);
+        attemptReconnect(); // Try again
+      }
+    }, RECONNECT_DELAY_MS * reconnectAttemptsRef.current); // Exponential backoff
+  }, [config, MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAY_MS]);
+
   // Set up event listeners when client changes
   useEffect(() => {
 
     const onOpen = () => {
       console.log('[LiveAPI] Connection opened successfully');
       setConnected(true);
+      setConnectionStatus('connected');
+      setConnectionError(null);
+      reconnectAttemptsRef.current = 0; // Reset reconnect counter
+      lastHeartbeatRef.current = Date.now();
     };
     
     const onSetupComplete = () => {
@@ -144,10 +197,20 @@ export function useLiveApi(): UseLiveApiResults {
         wasClean: event.wasClean
       } : 'no event data');
       setConnected(false);
+      
+      // Auto-reconnect unless it was a manual disconnect
+      if (!isManualDisconnectRef.current) {
+        setConnectionStatus('reconnecting');
+        attemptReconnect();
+      } else {
+        setConnectionStatus('disconnected');
+      }
     };
 
     const onError = (error: any) => {
       console.error('[LiveAPI] Connection error:', error);
+      setConnectionError(error.message || 'Connection error occurred');
+      setConnectionStatus('error');
     };
 
     const stopAudioStreamer = () => {
@@ -157,6 +220,9 @@ export function useLiveApi(): UseLiveApiResults {
     };
 
     const onAudio = async (data: ArrayBuffer) => {
+      // Update heartbeat - we're receiving data, connection is alive
+      lastHeartbeatRef.current = Date.now();
+      
       if (audioStreamerRef.current) {
         // CRITICAL FIX: Ensure audio context is resumed before playing
         try {
@@ -265,12 +331,50 @@ export function useLiveApi(): UseLiveApiResults {
       client.off('audio', onAudio);
       client.off('toolcall', onToolCall);
     };
-  }, [client]);
+  }, [client, attemptReconnect]);
+
+  // Connection health monitoring
+  useEffect(() => {
+    if (!connected) return;
+
+    const HEALTH_CHECK_INTERVAL = 30000; // Check every 30 seconds
+    const HEARTBEAT_TIMEOUT = 60000; // Consider dead if no activity for 60 seconds
+
+    const healthCheck = setInterval(() => {
+      const timeSinceLastHeartbeat = Date.now() - lastHeartbeatRef.current;
+      
+      if (timeSinceLastHeartbeat > HEARTBEAT_TIMEOUT) {
+        console.warn('[LiveAPI] Connection appears unhealthy - no activity for', timeSinceLastHeartbeat, 'ms');
+        console.log('[LiveAPI] Triggering reconnection...');
+        // Force disconnect and reconnect
+        client.disconnect();
+      } else {
+        console.log('[LiveAPI] Health check passed - connection is alive');
+      }
+    }, HEALTH_CHECK_INTERVAL);
+
+    return () => {
+      clearInterval(healthCheck);
+    };
+  }, [connected, client]);
+
+  // Cleanup reconnect timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const connect = useCallback(async () => {
     if (!config) {
       throw new Error('config has not been set');
     }
+    
+    setConnectionStatus('connecting');
+    setConnectionError(null);
+    isManualDisconnectRef.current = false; // Reset manual disconnect flag
     
     // CRITICAL FIX: Get fresh token before each connection attempt
     console.log('[CLIENT] Fetching fresh token before connecting...');
@@ -309,13 +413,27 @@ export function useLiveApi(): UseLiveApiResults {
       console.log('[CLIENT] Connected successfully with fresh token');
     } catch (error) {
       console.error('[CLIENT] Failed to connect with fresh token:', error);
+      setConnectionStatus('error');
+      setConnectionError(error instanceof Error ? error.message : 'Connection failed');
       throw error;
     }
   }, [client, config, model]);
 
   const disconnect = useCallback(async () => {
+    console.log('[CLIENT] Manual disconnect initiated');
+    isManualDisconnectRef.current = true; // Prevent auto-reconnect
+    
+    // Clear any pending reconnect attempts
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    reconnectAttemptsRef.current = 0;
+    
     client.disconnect();
     setConnected(false);
+    setConnectionStatus('disconnected');
+    setConnectionError(null);
   }, [setConnected, client]);
 
   return {
@@ -324,6 +442,8 @@ export function useLiveApi(): UseLiveApiResults {
     setConfig,
     connect,
     connected,
+    connectionStatus,
+    connectionError,
     disconnect,
     volume,
   };

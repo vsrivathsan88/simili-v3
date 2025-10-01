@@ -129,6 +129,11 @@ export class AudioStreamer {
       // Initialize scheduledTime only when we start playing
       this.scheduledTime = this.context.currentTime + this.initialBufferTime;
       this.scheduleNextBuffer();
+    } else {
+      // CRITICAL FIX: If already playing, schedule new buffers immediately
+      // This prevents the queue from growing indefinitely
+      console.log('[AudioStreamer] Already playing, scheduling new buffers immediately');
+      this.scheduleNextBuffer();
     }
   }
 
@@ -143,7 +148,10 @@ export class AudioStreamer {
   }
 
   private scheduleNextBuffer() {
-    const SCHEDULE_AHEAD_TIME = 0.2;
+    // CRITICAL FIX: More aggressive scheduling (1 second ahead instead of 0.2)
+    const SCHEDULE_AHEAD_TIME = 1.0;
+    
+    console.log('[AudioStreamer] scheduleNextBuffer called, queue length:', this.audioQueue.length, 'scheduledTime:', this.scheduledTime, 'currentTime:', this.context.currentTime);
 
     while (
       this.audioQueue.length > 0 &&
@@ -170,28 +178,45 @@ export class AudioStreamer {
       }
 
       source.buffer = audioBuffer;
+      
+      // CRITICAL FIX: Ensure proper audio routing
+      // Route: source → gainNode → (worklets) → destination
       source.connect(this.gainNode);
 
       const worklets = registeredWorklets.get(this.context);
 
       if (worklets) {
+        // If worklets exist, route through them
         Object.entries(worklets).forEach(([workletName, graph]) => {
           const { node, handlers } = graph;
           if (node) {
+            // Connect source to worklet for analysis
             source.connect(node);
             node.port.onmessage = function (ev: MessageEvent) {
               handlers.forEach(handler => {
                 handler.call(node.port, ev);
               });
             };
+            // Worklet connects to destination for audio passthrough
             node.connect(this.context.destination);
           }
         });
       }
-      // Ensure we never schedule in the past
+      
+      // CRITICAL FIX: Ensure we start playback immediately if context is running
+      // Don't let scheduledTime drift too far into the future
+      const maxDrift = 2.0; // Maximum 2 seconds of drift
+      if (this.scheduledTime - this.context.currentTime > maxDrift) {
+        console.warn('[AudioStreamer] scheduledTime drifted too far, resetting:', this.scheduledTime - this.context.currentTime, 'seconds');
+        this.scheduledTime = this.context.currentTime;
+      }
+      
       const startTime = Math.max(this.scheduledTime, this.context.currentTime);
+      
+      console.log('[AudioStreamer] Scheduling source.start() at', startTime, 'currentTime:', this.context.currentTime);
       source.start(startTime);
       this.scheduledTime = startTime + audioBuffer.duration;
+      console.log('[AudioStreamer] Next scheduled time:', this.scheduledTime, 'buffer duration:', audioBuffer.duration);
     }
 
     if (this.audioQueue.length === 0) {

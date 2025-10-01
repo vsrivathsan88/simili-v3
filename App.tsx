@@ -21,17 +21,21 @@
 import AvatarControlTray from './components/lesson/AvatarControlTray';
 import ErrorScreen from './components/demo/ErrorScreen';
 import LessonLayout from './components/lesson/LessonLayout';
-import { LiveAPIProvider } from './contexts/LiveAPIContext';
+import ConnectionStatus from './components/ConnectionStatus';
+import { LiveAPIProvider, useLiveAPIContext } from './contexts/LiveAPIContext';
 
 // Client no longer reads API keys from env; tokens fetched server-side in LiveAPI hook
 
 /**
- * Simili - Voice-first Socratic tutor for 3rd grade fractions
- * Lesson mode with integrated dialogue view
+ * Inner App component that has access to LiveAPI context
  */
-function App() {
+function AppContent() {
+  const { connectionStatus, connectionError } = useLiveAPIContext();
+  
   return (
-    <div className="App" style={{
+    <>
+      <ConnectionStatus status={connectionStatus} error={connectionError} />
+      <div className="App" style={{
       position: 'fixed',
       top: 0,
       left: 0,
@@ -45,7 +49,6 @@ function App() {
       borderRadius: '24px',
       boxShadow: 'inset 0 0 40px rgba(139, 92, 246, 0.03), 0 0 60px rgba(139, 92, 246, 0.05)'
     }}>
-      <LiveAPIProvider>
         <ErrorScreen />
         
         <div className="lesson-mode" style={{
@@ -66,8 +69,20 @@ function App() {
             <AvatarControlTray />
           </div>
         </div>
-      </LiveAPIProvider>
-    </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Simili - Voice-first Socratic tutor for 3rd grade fractions
+ * Lesson mode with integrated dialogue view
+ */
+function App() {
+  return (
+    <LiveAPIProvider>
+      <AppContent />
+    </LiveAPIProvider>
   );
 }
 
