@@ -8,7 +8,7 @@ import WelcomeScreen from '../welcome-screen/WelcomeScreen';
 // FIX: Import LiveServerContent to correctly type the content handler.
 import { LiveConnectConfig, Modality, LiveServerContent } from '@google/genai';
 
-import { useLiveAPIContext } from '../../../contexts/LiveAPIContext';
+import { useLiveAPIContext } from '../../../hooks/media/use-live-api-context';
 import {
   useSettings,
   useLogStore,
@@ -170,16 +170,24 @@ export default function StreamingConsole() {
       }
     };
 
+    // CRITICAL FIX: Only set up event listeners if client exists
+    if (!client) {
+      console.log('[StreamingConsole] No client available, skipping event listener setup');
+      return;
+    }
+
     client.on('inputTranscription', handleInputTranscription);
     client.on('outputTranscription', handleOutputTranscription);
     client.on('content', handleContent);
     client.on('turncomplete', handleTurnComplete);
 
     return () => {
-      client.off('inputTranscription', handleInputTranscription);
-      client.off('outputTranscription', handleOutputTranscription);
-      client.off('content', handleContent);
-      client.off('turncomplete', handleTurnComplete);
+      if (client) {
+        client.off('inputTranscription', handleInputTranscription);
+        client.off('outputTranscription', handleOutputTranscription);
+        client.off('content', handleContent);
+        client.off('turncomplete', handleTurnComplete);
+      }
     };
   }, [client]);
 

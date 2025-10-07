@@ -26,9 +26,9 @@ test('should receive and process audio from Gemini', async ({ page, context }) =
   await page.goto('http://localhost:3000');
   await page.waitForSelector('.lesson-layout', { timeout: 10000 });
 
-  // Connect
-  await page.locator('.call-button.connect').first().click({ force: true });
-  await page.locator('button:has-text("Start! 🚀")').click();
+  // Wait for and answer Pi's call
+  await page.waitForSelector('.incoming-call-overlay', { timeout: 10000 });
+  await page.locator('.incoming-call-avatar').click({ force: true });
   
   console.log('⏳ Waiting for connection to establish...');
   await page.waitForTimeout(5000);

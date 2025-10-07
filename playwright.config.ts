@@ -15,7 +15,14 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        // CRITICAL FIX: Grant microphone permissions for audio tests
+        launchOptions: {
+          args: ['--use-fake-ui-for-media-stream']
+        },
+        permissions: ['microphone']
+      },
     },
   ],
 

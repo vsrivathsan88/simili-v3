@@ -24,7 +24,9 @@ import { memo, ReactNode, useEffect, useRef, useState } from 'react';
 import { AudioRecorder } from '../../../lib/audio-recorder';
 import { useSettings, useTools, useLogStore } from '@/lib/state';
 
-import { useLiveAPIContext } from '../../../contexts/LiveAPIContext';
+import { useLiveAPIContext } from '../../../hooks/media/use-live-api-context';
+import { useMic } from '../../../hooks/media/use-mic';
+import { useAudioRecorder } from '../../../hooks/media/use-audio-recorder';
 
 export type ControlTrayProps = {
   children?: ReactNode;
@@ -53,6 +55,12 @@ function ControlTray({ children }: ControlTrayProps) {
 
   useEffect(() => {
     const onData = (base64: string) => {
+      // CRITICAL FIX: Only send audio if client exists
+      if (!client) {
+        console.log('[ControlTray] No client available, skipping audio chunk');
+        return;
+      }
+      
       client.sendRealtimeInput([
         {
           mimeType: 'audio/pcm;rate=16000',

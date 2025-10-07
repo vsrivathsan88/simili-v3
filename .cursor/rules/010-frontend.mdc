@@ -1,5 +1,24 @@
 ---
-description:
-globs:
-alwaysApply: true
+name: Frontend – ESM + Import Map
+description: Use native ESM with an import map and esm.sh; avoid bundlers.
+globs: ["public/index.html", "src/**/*"]
+priority: 2
 ---
+
+# Import map policy
+- All deps are mapped in `public/index.html` using `<script type="importmap">`.
+- Use **pinned versions** from `https://esm.sh/` and prefer stable targets.
+- Example baseline (adjust versions as needed):
+
+```html
+<!-- public/index.html -->
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "zustand": "https://esm.sh/zustand@4.5.2",
+    "zod": "https://esm.sh/zod@3.23.8"
+  }
+}
+</script>

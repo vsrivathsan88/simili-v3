@@ -1,5 +1,19 @@
 ---
-description:
-globs:
-alwaysApply: true
+name: Supabase – Auth, Storage, RLS
+description: Use supabase-js via import map; respect RLS; never bypass with service key on client.
+globs: ["src/**/*", "supabase/**/*", "supabase/migrations/**/*"]
+priority: 2
 ---
+
+# Client usage
+- Initialize supabase with anon key only.
+- Use Edge Functions for privileged actions (signed upload URLs, Gemini tokens).
+- Always check consent flags before persisting transcripts/audio.
+
+# Storage
+- Upload audio via signed URLs to private bucket `audio/`.
+- Do not embed public URLs to private assets in transcripts; store `storage_path` and hydrate via signed URL on demand.
+
+# RLS
+- Never query with service role from the browser.
+- Prefer row-scoped selects (session_id) and narrow columns when listing.

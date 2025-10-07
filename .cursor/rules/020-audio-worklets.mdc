@@ -1,5 +1,36 @@
+*(Import maps are a modern, browser-native way to resolve modules; esm.sh supports this flow.)* :contentReference[oaicite:2]{index=2}
+
 ---
-description:
-globs:
-alwaysApply: true
+
+### `.cursor/rules/020-audio-worklets.mdc`
+```md
 ---
+name: Web Audio – Worklets & Mic
+description: Audio must run in AudioWorklets; follow autoplay, sample-rate, and VAD guardrails.
+globs: ["src/audio/**/*"]
+priority: 2
+---
+
+# Core rules
+- Create **AudioWorkletProcessor** classes for mic capture (encode) and TTS playback (decode).
+- **Resume AudioContext on user gesture** to satisfy autoplay policies.
+- Use `MediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })`.
+- Maintain a **steady clock**; batch frames in the worklet and postMessage to the main thread with transferable buffers.
+- Implement a simple **VAD** (RMS/energy threshold) in worklet to reduce upstream bandwidth; expose sensitivity via params.
+- Keep memory low: reuse `Float32Array`/`Int16Array` buffers.
+
+# Template (sketch)
+
+```ts
+// src/audio/worklets/mic-processor.ts
+class MicProcessor extends AudioWorkletProcessor {
+  // ...
+  process(inputs: Float32Array[][]) {
+    // 1) gather mono input
+    // 2) optional VAD
+    // 3) convert F32 -> PCM16 LE into ring buffer
+    // 4) postMessage every N frames (transfer SAB slice)
+    return true;
+  }
+}
+registerProcessor("mic-processor", MicProcessor);

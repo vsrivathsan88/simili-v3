@@ -1,5 +1,14 @@
 ---
-description:
-globs:
-alwaysApply: true
+name: Security & Keys
+description: Keep secrets server-side; use .cursorignore to hide keys & artifacts from the agent index.
+globs: ["**/*"]
+priority: 3
 ---
+
+# API keys & tokens
+- Never embed long-lived Google API keys in client code.
+- Provide a tiny `/server` function to mint **short-lived** tokens or relay the WS.
+- Scrub PII from logs; mask keys in devtools.
+
+# Cursor indexing
+- Add `.cursorignore` to exclude `.env*`, `/server/.env*`, and any capture artifacts.

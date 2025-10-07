@@ -162,7 +162,10 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
 
   public sendRealtimeInput(chunks: Array<{ mimeType: string; data: string }>) {
     if (this._status !== 'connected' || !this.session) {
-      // Silently ignore if not connected instead of emitting error
+      console.error('[GenAIClient] ❌ CANNOT SEND AUDIO - Not connected or no session!', {
+        status: this._status,
+        hasSession: !!this.session
+      });
       return;
     }
     try {
@@ -170,8 +173,7 @@ export class GenAILiveClient extends EventEmitter<LiveClientEventTypes> {
         this.session!.sendRealtimeInput({ media: chunk });
       });
     } catch (error) {
-      // WebSocket might be closed, silently ignore
-      console.warn('Failed to send realtime input:', error);
+      console.error('[GenAIClient] ❌ Failed to send realtime input:', error);
       return;
     }
 

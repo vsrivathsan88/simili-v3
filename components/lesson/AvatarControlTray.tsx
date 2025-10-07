@@ -1,488 +1,484 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState, useEffect } from 'react';
-import { useLiveAPIContext } from '../../contexts/LiveAPIContext';
-import { useLogStore, useMilestoneStore } from '@/lib/state';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLiveAPIContext } from '../../hooks/media/use-live-api-context';
+import { Volume2, Loader } from 'lucide-react';
 import { AudioRecorder } from '../../lib/audio-recorder';
-import { ScreenRecorder } from '../../lib/screen-recorder';
-import { 
-  Phone, 
-  PhoneOff, 
-  Mic, 
-  MicOff, 
-  Ear, 
-  BrainCircuit, 
-  Waves,
-  Download,
-  RotateCcw,
-  Unplug,
-  MoreVertical,
-  MonitorPlay,
-  Lock,
-  Heart,
-  Shield
-} from 'lucide-react';
 import './AvatarControlTray.css';
 
-interface AvatarControlTrayProps {
-  micVolume?: number;
-  agentVolume?: number;
-}
+// Sound effect helper - use global audioContext to avoid autoplay blocks
+const playSound = (frequency: number, duration: number, type: 'success' | 'start' | 'yourTurn' | 'error' = 'success') => {
+  try {
+    // Use the global audioContext from utils
+    const audioContext = (window as any).audioContext;
+    if (!audioContext) return;
 
-export default function AvatarControlTray({ micVolume = 0, agentVolume = 0 }: AvatarControlTrayProps) {
-  const { connected, connect, disconnect, volume, client } = useLiveAPIContext();
-  const [audioRecorder] = useState(() => new AudioRecorder());
-  const [screenRecorder] = useState(() => new ScreenRecorder());
-  const [muted, setMuted] = useState(false);
-  const [screenSharing, setScreenSharing] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
-  const [activity, setActivity] = useState<'listening' | 'thinking' | 'speaking'>('listening');
-  const [showPermissionModal, setShowPermissionModal] = useState(false);
-  const [screenDenied, setScreenDenied] = useState(false);
-  
-  // Tapback Memoji avatars - Apple style!
-  const studentAvatar = 'https://www.tapback.co/api/avatar/simili-student.webp';
-  const tutorAvatar = '/pi-removebg.png';
-
-  // Use actual volume from LiveAPI context for agent audio
-  const actualAgentVolume = volume || agentVolume;
-  
-  // Determine speaking state based on volume levels
-  useEffect(() => {
-    if (actualAgentVolume > 0.1) {
-      setActivity('speaking');
-    } else if (micVolume > 0.1) {
-      setActivity('listening');
-    } else if (connected) {
-      setActivity('thinking');
-    } else {
-      setActivity('listening');
+    // Resume if suspended
+    if (audioContext.state === 'suspended') {
+      audioContext.resume();
     }
-  }, [micVolume, actualAgentVolume, connected]);
 
-  // Audio recorder setup (same as original ControlTray)
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.frequency.value = frequency;
+    oscillator.type = 'sine';
+
+    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + duration);
+  } catch (err) {
+    // Silently fail - sound effects are nice-to-have
+    console.warn('[Sound] Failed to play sound:', err);
+  }
+};
+
+const sounds = {
+  connected: () => {
+    // Cheerful ascending chime
+    playSound(523.25, 0.1, 'success'); // C
+    setTimeout(() => playSound(659.25, 0.15, 'success'), 100); // E
+  },
+  piStartsSpeaking: () => {
+    // Gentle bloop
+    playSound(440, 0.1, 'start');
+  },
+  yourTurn: () => {
+    // Encouraging ding
+    playSound(880, 0.2, 'yourTurn');
+  },
+  error: () => {
+    // Gentle descending tone
+    playSound(440, 0.15, 'error');
+    setTimeout(() => playSound(349.23, 0.2, 'error'), 150);
+  }
+};
+
+export default function AvatarControlTray() {
+  const { connect, disconnect, client, connected } = useLiveAPIContext();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isRinging, setIsRinging] = useState(false);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const screenIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSpeakingStateRef = useRef(false);
+  const ringIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const hasGreetedRef = useRef(false);
+  const sendingAudioRef = useRef(false); // Track if audio is being sent
+  const volumeLogCountRef = useRef(0); // Track volume log count
+  const audioChunkCountRef = useRef(0); // Track audio chunk count
+  const [audioRecorder] = useState(() => new AudioRecorder(16000)); // 16kHz required for Gemini Live input
+
+  // Memoji URLs
+  const studentAvatar = 'https://www.tapback.co/api/avatar/simili-student.webp';
+  const piAvatar = '/pi-removebg.png';
+
+  // Phone ringing sound
+  const playRingSound = () => {
+    // Classic phone ring pattern: two-tone
+    playSound(800, 0.2, 'success');
+    setTimeout(() => playSound(900, 0.2, 'success'), 250);
+  };
+
+  // Start ringing when component mounts
   useEffect(() => {
+    setIsRinging(true);
+    playRingSound();
+
+    // Ring every 3 seconds
+    ringIntervalRef.current = setInterval(() => {
+      playRingSound();
+    }, 3000);
+
+    return () => {
+      if (ringIntervalRef.current) {
+        clearInterval(ringIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Handle connection: stop ringing, play sound, request screen share FIRST, then greet
+  useEffect(() => {
+    console.log('[AvatarControlTray] Connection state:', { connected, hasClient: !!client });
+    if (connected) {
+      // Stop ringing
+      setIsRinging(false);
+      if (ringIntervalRef.current) {
+        clearInterval(ringIntervalRef.current);
+        ringIntervalRef.current = null;
+      }
+
+      sounds.connected();
+
+      // Session setup with proper greeting trigger
+      const setupSession = async () => {
+        if (!hasGreetedRef.current) {
+          hasGreetedRef.current = true;
+
+          // Small delay for connection to stabilize
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Don't send any message - let Pi initiate based on system prompt
+          console.log('[AvatarControlTray] Waiting for Pi to initiate greeting...');
+
+          // TEMPORARILY DISABLED: Screen sharing to debug dialogue issues
+          // setTimeout(() => {
+          //   console.log('[AvatarControlTray] Starting screen share with delay...');
+          //   startScreenShare();
+          // }, 5000); // 5 second delay after greeting
+          console.log('[AvatarControlTray] Screen sharing DISABLED for debugging');
+        }
+      };
+
+      setupSession();
+    }
+  }, [connected, client]);
+
+  // CRITICAL: Start audio recording when connected (so Pi can hear you!)
+  useEffect(() => {
+    // Reset counters when effect runs
+    audioChunkCountRef.current = 0;
+    volumeLogCountRef.current = 0;
+    let volumeSamples: number[] = [];
+
     const onData = (base64: string) => {
-      console.log('[MicInput] Sending audio chunk to Gemini:', base64.substring(0, 20) + '...', base64.length, 'bytes');
+      if (!client || !connected) {
+        console.log('[AvatarControlTray] No client available, skipping audio chunk');
+        return;
+      }
+
+      // Mark that we're sending audio
+      sendingAudioRef.current = true;
+      audioChunkCountRef.current++;
+
+      // Log EVERY chunk to see if audio is being sent at all
+      console.log(`[Audio] Sending chunk #${audioChunkCountRef.current} (16kHz PCM, size: ${base64.length} bytes)`);
+
+      if (audioChunkCountRef.current === 1) {
+        console.log('[Audio] FIRST CHUNK SENT - Pi should be able to hear now!');
+        console.log('[Audio] Base64 sample (first 100 chars):', base64.substring(0, 100));
+      }
+
       client.sendRealtimeInput([
         {
           mimeType: 'audio/pcm;rate=16000',
           data: base64,
         },
       ]);
+
+      // Clear the flag after a short delay
+      setTimeout(() => {
+        sendingAudioRef.current = false;
+      }, 50);
     };
-    
-    // Stop audio recorder first to prevent sending to old client
+
+    const onVolume = (volume: number) => {
+      volumeSamples.push(volume);
+      if (volumeSamples.length > 50) {
+        volumeSamples.shift();
+      }
+
+      volumeLogCountRef.current++;
+      // Log first few volume events, then periodically, and whenever there's significant volume
+      if (volumeLogCountRef.current <= 5 || volumeLogCountRef.current % 100 === 0 || volume > 0.01) {
+        const avgVolume = volumeSamples.reduce((a, b) => a + b, 0) / volumeSamples.length;
+        console.log(`[Audio Volume] Event #${volumeLogCountRef.current}:`, {
+          current: volume.toFixed(4),
+          average: avgVolume.toFixed(4),
+          status: volume > 0.1 ? '🎤 SPEAKING' : volume > 0.01 ? '🔊 sound' : '🔇 silence'
+        });
+      }
+    };
+
+    // Stop audio recorder first to prevent overlap
     audioRecorder.stop();
     audioRecorder.off('data', onData);
-    
-    if (connected && !muted && audioRecorder) {
+    audioRecorder.off('volume', onVolume);
+
+    if (connected && audioRecorder && client) {
+      console.log('[AvatarControlTray] Starting audio recording for 16kHz input...');
+      console.log('[AvatarControlTray] AudioRecorder instance:', audioRecorder);
+      console.log('[AvatarControlTray] Client instance:', client);
+      console.log('[AvatarControlTray] Connected status:', connected);
+
       audioRecorder.on('data', onData);
-      audioRecorder.start();
+      audioRecorder.on('volume', onVolume);
+
+      audioRecorder.start().then(() => {
+        console.log('[AvatarControlTray] ✅ Audio recording started successfully');
+        console.log('[AvatarControlTray] Microphone is now active - speak now!');
+      }).catch((err) => {
+        console.error('[AvatarControlTray] ❌ CRITICAL: Failed to start audio recording:', err);
+        alert('Microphone access failed! Please allow microphone access and refresh.');
+      });
+    } else {
+      console.error('[AvatarControlTray] ❌ CANNOT START AUDIO:', {
+        connected,
+        hasRecorder: !!audioRecorder,
+        hasClient: !!client
+      });
     }
-    
+
     return () => {
       audioRecorder.stop();
       audioRecorder.off('data', onData);
+      audioRecorder.off('volume', onVolume);
     };
-  }, [connected, client, muted, audioRecorder]);
+  }, [connected, client, audioRecorder]);
 
-  // Screen recorder setup - sends JPEG frames to Gemini Live for vision
+  // Listen for audio events to show visual feedback + play sounds
   useEffect(() => {
-    let lastSendTime = 0;
-    const MIN_SEND_INTERVAL = 2000; // Minimum 2 seconds between sends (matches frame interval)
-    
-    const onVideoData = (base64JpegData: string) => {
-      const now = Date.now();
-      
-      // Throttle to avoid overwhelming the connection
-      if (now - lastSendTime < MIN_SEND_INTERVAL) {
-        console.log('[Vision] Throttling frame');
-        return;
+    if (!client) return;
+
+    const handleAudio = () => {
+      // Play sound only when Pi starts speaking (not on every audio chunk)
+      if (!lastSpeakingStateRef.current) {
+        sounds.piStartsSpeaking();
+        lastSpeakingStateRef.current = true;
       }
-      
-      // CRITICAL: Don't send frames while user is speaking (prioritize audio)
-      if (micVolume > 0.05) {
-        console.log('[Vision] Pausing frames while user speaks');
-        return;
-      }
-      
-      // CRITICAL: Don't send frames while Pi is speaking (avoid overwhelming connection)
-      if (agentVolume > 0.05) {
-        console.log('[Vision] Pausing frames while Pi speaks');
-        return;
-      }
-      
-      // Only send if client is connected
-      if (connected && client) {
-        try {
-          lastSendTime = now;
-          console.log('[Vision] Sending JPEG frame to Gemini Live');
-          
-          // Send JPEG frame using correct Gemini Live format
-          client.sendRealtimeInput([
-            {
-              mimeType: 'image/jpeg', // Correct MIME type per Gemini Live API docs
-              data: base64JpegData,
-            },
-          ]);
-        } catch (error) {
-          console.error('[Vision] Error sending JPEG frame:', error);
-        }
-      }
+      setIsSpeaking(true);
+      // Don't reset here - let turncomplete handle it
     };
 
-    const onStarted = () => {
-      setScreenSharing(true);
-      console.log('[Vision] Screen sharing started - Pi can see your screen!');
+    const handleInputTranscription = (data: any) => {
+      // Log to debug VAD detection
+      console.log('[AvatarControlTray] Input transcription detected:', data);
+      setIsListening(true);
     };
 
-    const onStopped = () => {
-      setScreenSharing(false);
-      console.log('[Vision] Screen sharing stopped');
+    const handleTurnComplete = () => {
+      console.log('[AvatarControlTray] Turn complete - resetting states');
+      setIsListening(false);
+      setIsSpeaking(false);
+      lastSpeakingStateRef.current = false;
+      // Play "your turn" sound
+      sounds.yourTurn();
     };
 
-    const onError = (error: any) => {
-      console.error('[Vision] Screen sharing error:', error);
-      setScreenSharing(false);
-    };
-    
-    // Set up listeners
-    screenRecorder.on('data', onVideoData);
-    screenRecorder.on('started', onStarted);
-    screenRecorder.on('stopped', onStopped);
-    screenRecorder.on('error', onError);
-    
-    // Start screen sharing when connected (now using correct JPEG frame approach)
-    if (connected && !screenRecorder.isRecording()) {
-      // Delay screen sharing to ensure connection is stable
-      const startTimer = setTimeout(() => {
-        if (connected && !screenRecorder.isRecording()) {
-          console.log('[Vision] Starting JPEG frame capture (correct Gemini Live format)');
-          screenRecorder.start().catch((err) => {
-            console.warn('[Vision] User denied screen sharing or error occurred:', err);
-            // Show gentle message about continuing without screen sharing
-            setScreenDenied(true);
-            // Continue without screen sharing (audio-only mode)
-          });
-        }
-      }, 2000); // Wait 2 seconds for connection to stabilize
-      
-      return () => {
-        clearTimeout(startTimer);
-      };
-    }
-    
-    // Only cleanup listeners, don't stop recording on every re-render
+    client.on('audio', handleAudio);
+    client.on('inputTranscription', handleInputTranscription);
+    client.on('turncomplete', handleTurnComplete);
+
     return () => {
-      screenRecorder.off('data', onVideoData);
-      screenRecorder.off('started', onStarted);
-      screenRecorder.off('stopped', onStopped);
-      screenRecorder.off('error', onError);
+      client.off('audio', handleAudio);
+      client.off('inputTranscription', handleInputTranscription);
+      client.off('turncomplete', handleTurnComplete);
     };
-  }, [connected, client, screenRecorder, micVolume, agentVolume]);
+  }, [client]);
 
-  const handleConnectClick = async () => {
-    if (!connected) {
-      // Show the friendly permission modal first
-      setShowPermissionModal(true);
-    }
-  };
+  // Screen sharing with proper throttling to prevent breaking audio
+  const startScreenShare = async () => {
+    if (!connected || !client) return;
 
-  const handlePermissionConfirm = async () => {
-    setShowPermissionModal(false);
     try {
-      await connect();
-      // Pi will automatically introduce itself based on system prompt
-    } catch (error) {
-      console.error('Connect failed:', error);
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          // Request lower resolution to reduce bandwidth
+          width: { ideal: 768 },
+          height: { ideal: 768 }
+        },
+      });
+      screenStreamRef.current = stream;
+      console.log('[ScreenShare] Started with 1 FPS throttling');
+
+      // CRITICAL FIX: Resume audio context after permission dialog
+      const audioContext = (window as any).audioContext;
+      if (audioContext && audioContext.state === 'suspended') {
+        await audioContext.resume();
+        console.log('[ScreenShare] Audio context resumed after dialog');
+      }
+
+      // Setup video capture with optimized settings
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.play();
+
+      // Send frames at 1 FPS as per Gemini Live API specs
+      let frameCount = 0;
+      screenIntervalRef.current = setInterval(() => {
+        if (!video.videoWidth || !video.videoHeight) return;
+
+        frameCount++;
+        console.log(`[ScreenShare] Capturing frame #${frameCount}`);
+
+        // Resize to 768x768 as recommended for Gemini Live
+        const targetSize = 768;
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+
+        // Calculate crop/scale to fit
+        const scale = Math.max(targetSize / video.videoWidth, targetSize / video.videoHeight);
+        const scaledWidth = video.videoWidth * scale;
+        const scaledHeight = video.videoHeight * scale;
+        const offsetX = (targetSize - scaledWidth) / 2;
+        const offsetY = (targetSize - scaledHeight) / 2;
+
+        ctx.drawImage(video, offsetX, offsetY, scaledWidth, scaledHeight);
+
+        // Convert to JPEG with lower quality to reduce size
+        canvas.toBlob((blob) => {
+          if (blob && client && connected) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64 = (reader.result as string).split(',')[1];
+
+              // Check if audio is being sent
+              const sendFrame = () => {
+                // If audio is being sent, wait a bit and try again
+                if (sendingAudioRef.current) {
+                  console.log('[ScreenShare] Deferring frame - audio in progress');
+                  setTimeout(sendFrame, 100);
+                  return;
+                }
+
+                // Send screen frame when audio is not active
+                console.log(`[ScreenShare] Sending frame #${frameCount} (768x768, ${blob.size} bytes)`);
+                client.sendRealtimeInput([{
+                  mimeType: 'image/jpeg',
+                  data: base64
+                }]);
+              };
+
+              sendFrame();
+            };
+            reader.readAsDataURL(blob);
+          }
+        }, 'image/jpeg', 0.5); // Lower quality to reduce bandwidth
+      }, 1000); // 1 FPS as per API documentation
+
+      // Handle stream end (don't disconnect lesson)
+      stream.getVideoTracks()[0].onended = () => {
+        stopScreenShare();
+        console.log('[ScreenShare] Stream ended - lesson continues without vision');
+      };
+    } catch (err) {
+      console.log('[ScreenShare] User cancelled or not available - continuing without vision');
+      // Don't stop the lesson if screen share fails
     }
   };
 
-  const handlePermissionCancel = () => {
-    setShowPermissionModal(false);
-  };
-
-  const handleDisconnectClick = () => {
-    // Stop audio and screen recording immediately
-    audioRecorder.stop();
-    if (screenRecorder.isRecording()) {
-      screenRecorder.stop();
+  const stopScreenShare = () => {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
+      screenStreamRef.current = null;
     }
-    
-    // Disconnect from Live API
-    disconnect();
-    
-    // Reset activity state
-    setActivity('listening');
-    setScreenSharing(false);
+    if (screenIntervalRef.current) {
+      clearInterval(screenIntervalRef.current);
+      screenIntervalRef.current = null;
+    }
+    console.log('[ScreenShare] Stopped');
   };
 
-  const handleMuteToggle = () => {
-    setMuted(!muted);
-  };
-
-  const handleExportLogs = () => {
-    const { turns } = useLogStore.getState();
-    const logData = {
-      conversation: turns.map(turn => ({
-        ...turn,
-        timestamp: turn.timestamp.toISOString(),
-      })),
+  // Cleanup screen share on unmount
+  useEffect(() => {
+    return () => {
+      stopScreenShare();
     };
+  }, []);
 
-    const jsonString = JSON.stringify(logData, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    a.href = url;
-    a.download = `lesson-transcript-${timestamp}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setShowMenu(false);
-  };
-
-  const handleReset = () => {
-    useLogStore.getState().clearTurns();
-    useMilestoneStore.getState().resetProgress();
-    setShowMenu(false);
-  };
-
-  const handleTestMilestone = () => {
-    // For testing: achieve next unlocked milestone
-    const { milestones, achieveMilestone } = useMilestoneStore.getState();
-    const nextMilestone = milestones.find(m => !m.achieved);
-    if (nextMilestone) {
-      achieveMilestone(nextMilestone.id);
+  const handleAnswerCall = async () => {
+    // Stop ringing immediately on click
+    setIsRinging(false);
+    if (ringIntervalRef.current) {
+      clearInterval(ringIntervalRef.current);
+      ringIntervalRef.current = null;
     }
-    setShowMenu(false);
+
+    setIsConnecting(true);
+    await connect();
+    setIsConnecting(false);
   };
 
-  const getStatusIcon = () => {
-    switch (activity) {
-      case 'listening':
-        return <Ear size={16} />;
-      case 'thinking':
-        return <BrainCircuit size={16} />;
-      case 'speaking':
-        return <Waves size={16} />;
-      default:
-        return <Ear size={16} />;
-    }
-  };
-
-  const getStatusText = () => {
-    switch (activity) {
-      case 'listening':
-        return 'Listening';
-      case 'thinking':
-        return 'Thinking';
-      case 'speaking':
-        return 'Speaking';
-      default:
-        return 'Ready';
-    }
+  const handleEndLesson = () => {
+    console.log('[AvatarControlTray] Ending lesson...');
+    stopScreenShare();
+    disconnect();
+    hasGreetedRef.current = false; // Reset for next session
   };
 
   return (
     <>
-      {/* Screen Denied Modal - Simple & Positive */}
-      {screenDenied && (
-        <div className="permission-modal-overlay" onClick={() => setScreenDenied(false)}>
-          <div className="permission-modal simple" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="big-emoji">💬</div>
-              <h2>No Problem!</h2>
-            </div>
-            
-            <div className="modal-body">
-              <p className="modal-intro" style={{ fontSize: '16px', margin: '24px 0' }}>
-                We can still learn by talking! 😊
-              </p>
-            </div>
-            
-            <div className="modal-actions">
-              <button className="modal-button confirm-big" onClick={() => setScreenDenied(false)} style={{ width: '100%' }}>
-                Let's Go! 🚀
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Permission Modal - Simple & Visual */}
-      {showPermissionModal && (
-        <div className="permission-modal-overlay" onClick={handlePermissionCancel}>
-          <div className="permission-modal simple" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="big-emoji">🎨</div>
-              <h2>Learn Fractions with Pi!</h2>
-            </div>
-            
-            <div className="modal-body simple">
-              <div className="simple-feature">
-                <Lock size={32} />
-                <p>Just you and me</p>
-              </div>
-              
-              <div className="simple-feature">
-                <Heart size={32} />
-                <p>Safe to explore</p>
-              </div>
-              
-              <div className="simple-feature">
-                <Waves size={32} />
-                <p>Take your time</p>
-              </div>
-            </div>
-            
-            <div className="modal-actions">
-              <button className="modal-button cancel-simple" onClick={handlePermissionCancel}>
-                Not Now
-              </button>
-              <button className="modal-button confirm-big" onClick={handlePermissionConfirm}>
-                Start! 🚀
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="avatar-control-tray">
-      {/* Student Avatar */}
-      <div className="avatar-container student">
-        <div
-          className={`avatar-display ${connected ? 'connected' : 'disconnected'} ${muted ? 'muted' : ''} ${micVolume > 0.1 ? 'active' : ''}`}
-          style={{ '--volume': micVolume } as React.CSSProperties}
-        >
-          <img src={studentAvatar} alt="You" className="avatar-image" />
-          <div className="pulse-ring"></div>
-          {muted && connected && (
-            <div className="muted-indicator">
-              <MicOff size={16} />
-            </div>
-          )}
-        </div>
-        <div className="avatar-label">You</div>
-        <div className="waveform">
-          {Array.from({ length: 8 }, (_, i) => (
+      {/* Full-Screen Incoming Call Popup */}
+      {(isRinging || isConnecting) && (
+        <div className={`incoming-call-overlay ${isConnecting ? 'answering' : ''}`}>
+          <div className="incoming-call-content">
+            {/* Large Pi Avatar */}
             <div
-              key={i}
-              className="wave-bar"
-              style={{
-                '--delay': `${i * 0.1}s`,
-                '--height': micVolume > 0.05 ? `${Math.random() * micVolume * 100}%` : '2px'
-              } as React.CSSProperties}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Simplified Controls */}
-      <div className="center-controls">
-        {/* Phone Call Style Controls */}
-        <div className="call-controls">
-          {!connected ? (
-            <button
-              className="call-button connect"
-              onClick={handleConnectClick}
-              aria-label="Connect to start conversation"
-              title="Connect"
+              className={`incoming-call-avatar ${isRinging ? 'ringing' : ''} ${isConnecting ? 'connecting' : ''}`}
+              onClick={!isConnecting ? handleAnswerCall : undefined}
+              style={{ cursor: !isConnecting ? 'pointer' : 'default' }}
             >
-              <Phone size={20} />
-            </button>
-          ) : (
-            <div className="connected-controls">
-              <button
-                className={`call-button mute ${muted ? 'active' : ''}`}
-                onClick={handleMuteToggle}
-                aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}
-                title={muted ? 'Unmute' : 'Mute'}
-              >
-                {muted ? <MicOff size={20} /> : <Mic size={20} />}
-              </button>
-              <button
-                className="call-button disconnect"
-                onClick={handleDisconnectClick}
-                aria-label="End conversation"
-                title="Hang Up"
-              >
-                <PhoneOff size={20} />
-              </button>
+              <img src={piAvatar} alt="Pi" className="avatar-image" />
+              {isRinging && <div className="ring-indicator-large">📞</div>}
+              {isConnecting && <Loader size={48} className="spinning connecting-loader-large" />}
             </div>
-          )}
-        </div>
 
-        {/* Private Session Indicator */}
-        {connected && screenSharing && (
-          <div className="private-session-indicator" title="Your safe space - just you and Pi">
-            <Lock size={14} />
-            <span className="private-text">Private Session</span>
-            <Heart size={12} className="heart-icon" />
+            {/* Call Status */}
+            <div className="incoming-call-text">
+              {isRinging && (
+                <>
+                  <h1 className="call-title">Pi is calling...</h1>
+                  <p className="call-subtitle">Click Pi to answer</p>
+                </>
+              )}
+              {isConnecting && (
+                <>
+                  <h1 className="call-title">Answering...</h1>
+                  <p className="call-subtitle">Getting ready for your lesson</p>
+                </>
+              )}
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Meatball Menu */}
-        <div className="menu-container">
-          <button
-            className="menu-button"
-            onClick={() => setShowMenu(!showMenu)}
-            aria-label="More options"
-            aria-expanded={showMenu}
-          >
-            <MoreVertical size={20} />
-          </button>
-          {showMenu && (
-            <div className="menu-dropdown">
-              <button onClick={handleExportLogs} className="menu-item">
-                <Download size={16} className="menu-icon" />
-                <span>Export Transcript</span>
-              </button>
-              <button onClick={handleTestMilestone} className="menu-item">
-                <span className="menu-icon" style={{ fontSize: '16px' }}>💎</span>
-                <span>Test Milestone (Dev)</span>
-              </button>
-              <button onClick={handleReset} className="menu-item">
-                <RotateCcw size={16} className="menu-icon" />
-                <span>Reset Session</span>
-              </button>
-              <button onClick={() => disconnect()} className="menu-item">
-                <Unplug size={16} className="menu-icon" />
-                <span>Disconnect</span>
-              </button>
+      {/* Control Tray (only visible when connected) */}
+      {connected && (
+        <div className="avatar-control-tray-redesign">
+
+          {/* Student Avatar - Left */}
+          <div className="avatar-container student">
+            <div className={`avatar-circle ${isListening ? 'listening' : ''}`}>
+              <img src={studentAvatar} alt="You" className="avatar-image" />
+              {isListening && (
+                <>
+                  <div className="pulse-ring" />
+                  <div className="audio-visualizer">
+                    <div className="audio-bar" />
+                    <div className="audio-bar" />
+                    <div className="audio-bar" />
+                    <div className="audio-bar" />
+                    <div className="audio-bar" />
+                  </div>
+                </>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+            <span className="avatar-label">You</span>
+          </div>
 
-      {/* Pi Avatar */}
-      <div className="avatar-container tutor">
-        <div
-          className={`avatar-display ${activity === 'speaking' ? 'speaking active' : ''}`}
-          style={{ '--volume': actualAgentVolume } as React.CSSProperties}
-        >
-          <img src={tutorAvatar} alt="Pi" className="avatar-image" />
-          <div className="pulse-ring"></div>
+          {/* Center Control */}
+          <div className="center-control">
+            <button onClick={handleEndLesson} className="end-lesson-button">
+              End Lesson
+            </button>
+          </div>
+
+          {/* Pi Avatar - Right */}
+          <div className="avatar-container pi">
+            <div className={`avatar-circle ${isSpeaking ? 'speaking' : ''} ${connected ? 'connected' : ''}`}>
+              <img src={piAvatar} alt="Pi" className="avatar-image" />
+              {isSpeaking && <div className="pulse-ring" />}
+            </div>
+            <span className="avatar-label">Pi</span>
+          </div>
         </div>
-        <div className="avatar-label">Pi</div>
-        <div className="waveform">
-          {Array.from({ length: 8 }, (_, i) => (
-            <div
-              key={i}
-              className="wave-bar"
-              style={{
-                '--delay': `${i * 0.1}s`,
-                '--height': actualAgentVolume > 0.05 ? `${Math.random() * actualAgentVolume * 100}%` : '2px'
-              } as React.CSSProperties}
-            />
-          ))}
-        </div>
-      </div>
-      </div>
+      )}
     </>
   );
 }

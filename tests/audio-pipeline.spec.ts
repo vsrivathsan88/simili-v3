@@ -37,36 +37,33 @@ test.describe('Audio Pipeline Tests', () => {
 
     console.log('✅ Page loaded successfully');
 
-    // Click connect button
-    const connectButton = page.locator('.call-button.connect').first();
-    await expect(connectButton).toBeVisible();
-    await connectButton.click({ force: true });
+    // Wait for incoming call overlay
+    await page.waitForSelector('.incoming-call-overlay', { timeout: 10000 });
 
-    console.log('✅ Clicked connect button');
+    // Answer Pi's call (force click due to ringing animation)
+    await page.locator('.incoming-call-avatar').click({ force: true });
 
-    // Wait for and accept permission modal
-    const startButton = page.locator('button:has-text("Start! 🚀")');
-    await startButton.waitFor({ timeout: 3000 });
-    await startButton.click();
-
-    console.log('✅ Accepted permission modal');
+    console.log('✅ Answered Pi\'s call');
 
     // Wait for connection to establish
-    await page.waitForTimeout(8000);
+    await page.waitForTimeout(3000);
 
     // Analyze console logs
     console.log('\n=== CONSOLE LOG ANALYSIS ===');
 
-    // Check for token fetch
-    const tokenFetchLogs = consoleLogs.filter(log => 
-      log.text.includes('[CLIENT] Fetching') && log.text.includes('token')
+    // Check for token fetch or token response
+    const tokenFetchLogs = consoleLogs.filter(log =>
+      (log.text.includes('[CLIENT] Fetching') && log.text.includes('token')) ||
+      (log.text.includes('[SINGLETON]') && log.text.includes('Token'))
     );
     console.log('Token fetch attempts:', tokenFetchLogs.length);
     expect(tokenFetchLogs.length).toBeGreaterThan(0);
 
-    // Check for token received
-    const tokenReceivedLogs = consoleLogs.filter(log => 
-      log.text.includes('[CLIENT]') && log.text.includes('token received')
+    // Check for successful token - look for various patterns
+    const tokenReceivedLogs = consoleLogs.filter(log =>
+      (log.text.includes('[CLIENT]') && log.text.includes('token received')) ||
+      (log.text.includes('[SINGLETON]') && log.text.includes('hasToken: true')) ||
+      (log.text.includes('Token response') && log.text.includes('hasToken: true'))
     );
     console.log('Token received:', tokenReceivedLogs.length > 0 ? '✅' : '❌');
     expect(tokenReceivedLogs.length).toBeGreaterThan(0);
@@ -150,10 +147,10 @@ test.describe('Audio Pipeline Tests', () => {
     console.log('Gemini WebSocket:', geminiWebSocket ? '✅' : '❌');
     console.log('WebSocket URL:', geminiWebSocket || 'Not found');
 
-    // Visual check - buttons should be in connected state
+    // Visual check - avatar tray should be visible when connected
     console.log('\n=== UI STATE ===');
-    const disconnectButton = page.locator('.call-button.disconnect');
-    const isConnected = await disconnectButton.isVisible();
+    const avatarTray = page.locator('.avatar-control-tray-redesign');
+    const isConnected = await avatarTray.isVisible();
     console.log('UI shows connected state:', isConnected ? '✅' : '❌');
     expect(isConnected).toBeTruthy();
 
@@ -257,11 +254,10 @@ test.describe('Audio Pipeline Tests', () => {
 
     // First connection
     console.log('\n=== FIRST CONNECTION ===');
-    await page.locator('.call-button.connect').first().click({ force: true });
-    await page.locator('button:has-text("Start! 🚀")').click();
+    await page.locator('.incoming-call-avatar').click({ force: true });
     await page.waitForTimeout(5000);
 
-    const firstConnectErrors = errorLogs.filter(e => 
+    const firstConnectErrors = errorLogs.filter(e =>
       e.includes('token') && e.toLowerCase().includes('used too many times')
     );
     console.log('Token errors after first connect:', firstConnectErrors.length);
@@ -269,13 +265,15 @@ test.describe('Audio Pipeline Tests', () => {
 
     // Disconnect
     console.log('\n=== DISCONNECTING ===');
-    await page.locator('.call-button.disconnect').click();
+    await page.locator('.end-lesson-button').click();
     await page.waitForTimeout(2000);
 
-    // Reconnect
+    // Reconnect - need to reload page to get Pi to ring again
     console.log('\n=== RECONNECTING ===');
     const initialErrorCount = errorLogs.length;
-    await page.locator('.call-button.connect').first().click({ force: true });
+    await page.reload();
+    await page.waitForSelector('.incoming-call-overlay', { timeout: 10000 });
+    await page.locator('.incoming-call-avatar').click({ force: true });
     await page.waitForTimeout(5000);
 
     const newErrors = errorLogs.slice(initialErrorCount);

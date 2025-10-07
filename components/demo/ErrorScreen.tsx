@@ -2,8 +2,8 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { useLiveAPIContext } from '@/contexts/LiveAPIContext';
 import React, { useEffect, useState } from 'react';
+import { useLiveAPIContext } from '../../hooks/media/use-live-api-context';
 
 export interface ExtendedErrorType {
   code?: number;
@@ -16,6 +16,12 @@ export default function ErrorScreen() {
   const [error, setError] = useState<{ message?: string } | null>(null);
 
   useEffect(() => {
+    // CRITICAL FIX: Only set up error listener if client exists
+    if (!client) {
+      console.log('[ErrorScreen] No client available, skipping error listener setup');
+      return;
+    }
+
     function onError(error: ErrorEvent) {
       console.error(error);
       setError(error);
@@ -24,7 +30,9 @@ export default function ErrorScreen() {
     client.on('error', onError);
 
     return () => {
-      client.off('error', onError);
+      if (client) {
+        client.off('error', onError);
+      }
     };
   }, [client]);
 

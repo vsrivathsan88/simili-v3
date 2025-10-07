@@ -358,3 +358,4 @@ const HEARTBEAT_TIMEOUT = 60000;      // Dead if no activity for 60s
 
 **Need help?** Check the console logs - they're comprehensive and clear.
 
+

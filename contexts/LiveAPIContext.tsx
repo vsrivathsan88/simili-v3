@@ -21,12 +21,21 @@
 import { createContext, FC, ReactNode, useContext } from 'react';
 import { useLiveApi, UseLiveApiResults } from '../hooks/media/use-live-api';
 
-const LiveAPIContext = createContext<UseLiveApiResults | undefined>(undefined);
+// Export the type so other modules can use it
+export type { UseLiveApiResults };
 
-export type LiveAPIProviderProps = {
+// Create the context with a default undefined value
+export const LiveAPIContext = createContext<UseLiveApiResults | undefined>(
+  undefined
+);
+
+// Custom hook to use the LiveAPI context has been moved to hooks/media/use-live-api-context.ts
+
+export interface LiveAPIProviderProps {
   children: ReactNode;
-};
+}
 
+// Provider component
 export const LiveAPIProvider: FC<LiveAPIProviderProps> = ({
   children,
 }) => {
@@ -37,12 +46,4 @@ export const LiveAPIProvider: FC<LiveAPIProviderProps> = ({
       {children}
     </LiveAPIContext.Provider>
   );
-};
-
-export const useLiveAPIContext = () => {
-  const context = useContext(LiveAPIContext);
-  if (!context) {
-    throw new Error('useLiveAPIContext must be used wihin a LiveAPIProvider');
-  }
-  return context;
 };

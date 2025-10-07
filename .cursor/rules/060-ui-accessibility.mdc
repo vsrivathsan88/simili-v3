@@ -1,5 +1,17 @@
 ---
-description:
-globs:
-alwaysApply: true
+name: UI – Accessibility & Console
+description: Streaming transcript console, keyboard nav, and motion safety.
+globs: ["src/components/**/*"]
+priority: 2
 ---
+
+# Transcript console
+- Container `role="log"` `aria-live="polite"`; each turn has `data-speaker="user|ai"` and a timestamp.
+- Provide copy-to-clipboard per turn; keep virtualization simple (no scrolling jank).
+
+# Controls
+- Space/Enter toggles connect/disconnect when focused.
+- Visible focus rings; minimum 44x44px tap targets.
+
+# Color/typography
+- Minimum 4.5:1 contrast. Prefer system fonts for perf; you may later swap to Atkinson Hyperlegible.

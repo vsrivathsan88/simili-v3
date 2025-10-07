@@ -1,0 +1,18 @@
+---
+name: Tools / Function Calling
+description: Define tools with zod schemas; validate inputs; sandbox side effects; return JSON-friendly results.
+globs: ["src/tools/**/*"]
+priority: 2
+---
+
+# Registry pattern
+- `tools/index.ts` exports a map: `{ [toolName]: { schema, handler } }`.
+- `schema` is a zod object; `handler` is async and **pure** (no DOM) unless explicitly marked.
+
+# Execution
+- When Gemini requests a tool, look up schema, `schema.parse(payload)`, then `await handler(parsed)`.
+- Return results as **plain JSON**; large payloads should be URLs (blob/object URLs) not buffers.
+
+# Safety
+- Never call `eval`/dynamic import from tool args.
+- For external fetches, require allowlist domains.

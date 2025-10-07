@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gemini Live Connection Diagnostic</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #00ff00; }
+        .log { margin: 5px 0; padding: 5px; background: #2d2d2d; border-left: 3px solid #00ff00; }
+        .error { border-left-color: #ff0000; color: #ff6b6b; }
+        .warning { border-left-color: #ffaa00; color: #ffd93d; }
+        .info { border-left-color: #00aaff; color: #6bcfff; }
+        #stats { position: fixed; top: 20px; right: 20px; background: #2d2d2d; padding: 15px; border: 2px solid #00ff00; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Gemini Live Connection Diagnostic</h1>
+    <div id="stats">
+        <div>Active Clients: <span id="clientCount">0</span></div>
+        <div>Active WebSockets: <span id="wsCount">0</span></div>
+        <div>Audio Streams: <span id="audioCount">0</span></div>
+        <div>Token Requests: <span id="tokenCount">0</span></div>
+    </div>
+    <div id="logs"></div>
+
+    <script type="module">
+        const logs = document.getElementById('logs');
+        const stats = {
+            clients: new Set(),
+            websockets: new Set(),
+            audioStreams: new Set(),
+            tokenRequests: 0
+        };
+
+        function updateStats() {
+            document.getElementById('clientCount').textContent = stats.clients.size;
+            document.getElementById('wsCount').textContent = stats.websockets.size;
+            document.getElementById('audioCount').textContent = stats.audioStreams.size;
+            document.getElementById('tokenCount').textContent = stats.tokenRequests;
+        }
+
+        function log(message, type = 'log') {
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logs.insertBefore(div, logs.firstChild);
+            if (logs.children.length > 100) logs.lastChild.remove();
+        }
+
+        // Intercept console logs
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        console.log = (...args) => {
+            originalLog(...args);
+            const msg = args.join(' ');
+            
+            if (msg.includes('[SINGLETON]')) {
+                if (msg.includes('Creating new global client')) {
+                    const clientId = 'client-' + Date.now();
+                    stats.clients.add(clientId);
+                    log(`🆕 NEW CLIENT CREATED: ${clientId}`, 'warning');
+                } else if (msg.includes('Reusing existing')) {
+                    log('♻️  Reusing existing client (GOOD)', 'info');
+                }
+            }
+            
+            if (msg.includes('Token request') || msg.includes('token received')) {
+                stats.tokenRequests++;
+                log(`🎫 Token request #${stats.tokenRequests}`, stats.tokenRequests > 1 ? 'warning' : 'info');
+            }
+            
+            if (msg.includes('WebSocket') || msg.includes('ws://')) {
+                const wsId = 'ws-' + Date.now();
+                stats.websockets.add(wsId);
+                log(`🔌 WebSocket opened: ${wsId}`, stats.websockets.size > 1 ? 'error' : 'info');
+            }
+            
+            if (msg.includes('[Audio]') && msg.includes('Received audio data')) {
+                const streamId = 'stream-' + Date.now();
+                stats.audioStreams.add(streamId);
+                log(`🔊 Audio stream detected`, stats.audioStreams.size > 1 ? 'error' : 'info');
+            }
+            
+            if (msg.includes('MULTIPLE') || msg.includes('DUPLICATE')) {
+                log(`🚨 ${msg}`, 'error');
+            }
+            
+            updateStats();
+        };
+
+        console.error = (...args) => {
+            originalError(...args);
+            log(`❌ ERROR: ${args.join(' ')}`, 'error');
+        };
+
+        console.warn = (...args) => {
+            originalWarn(...args);
+            log(`⚠️  WARNING: ${args.join(' ')}`, 'warning');
+        };
+
+        log('🚀 Diagnostic started - monitoring Gemini Live connections...', 'info');
+        log('📍 Navigate to http://localhost:3000 in another tab to test', 'info');
+        
+        // Monitor for multiple audio contexts
+        const originalAudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioContextCount = 0;
+        window.AudioContext = window.webkitAudioContext = function(...args) {
+            audioContextCount++;
+            log(`🎵 AudioContext created (Total: ${audioContextCount})`, audioContextCount > 2 ? 'warning' : 'info');
+            return new originalAudioContext(...args);
+        };
+    </script>
+</body>
+</html>

@@ -20,14 +20,19 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-
-import App from './App';
+import { LiveAPIProvider } from './contexts/LiveAPIContext';
+import LessonLayout from './components/lesson/LessonLayout';
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
 root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+  // TEMPORARY: StrictMode disabled during development to prevent double-mounting
+  // which causes issues with singleton WebSocket connections to Gemini Live
+  // Re-enable for production builds
+  // <React.StrictMode>
+    <LiveAPIProvider>
+      <LessonLayout />
+    </LiveAPIProvider>
+  // </React.StrictMode>
 );

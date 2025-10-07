@@ -60,25 +60,78 @@ export class AudioRecorder {
       throw new Error('Could not request user media');
     }
 
+    // CRITICAL FIX: Prevent multiple concurrent starts
+    if (this.starting) {
+      console.log('[AudioRecorder] Start already in progress, waiting...');
+      await this.starting;
+      return;
+    }
+
+    if (this.recording) {
+      console.log('[AudioRecorder] Already recording, skipping start');
+      return;
+    }
+
     this.starting = new Promise(async (resolve, reject) => {
       try {
-        this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
+        // CRITICAL FIX: Enable echo cancellation, noise suppression, and auto gain
+        // This prevents speaker output from being captured by the microphone
+        console.log('[AudioRecorder] Requesting microphone permission...');
+        this.stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: this.sampleRate,
+          }
+        });
+
         // CRITICAL FIX: Validate stream before using it
         if (!this.stream || !(this.stream instanceof MediaStream)) {
           throw new Error('Failed to get valid MediaStream from getUserMedia');
         }
-        
-        console.log('[AudioRecorder] Got microphone stream:', this.stream.getTracks().length, 'tracks');
-        
-        this.audioContext = await audioContext({ sampleRate: this.sampleRate });
-        
+
+        // Debug audio track information
+        const audioTrack = this.stream.getAudioTracks()[0];
+        if (audioTrack) {
+          const settings = audioTrack.getSettings();
+          console.log('[AudioRecorder] ✅ Got microphone stream!', {
+            trackLabel: audioTrack.label,
+            trackEnabled: audioTrack.enabled,
+            trackMuted: audioTrack.muted,
+            trackReadyState: audioTrack.readyState,
+            settings: {
+              deviceId: settings.deviceId,
+              sampleRate: settings.sampleRate,
+              channelCount: settings.channelCount,
+              echoCancellation: settings.echoCancellation,
+              noiseSuppression: settings.noiseSuppression,
+              autoGainControl: settings.autoGainControl,
+            }
+          });
+        } else {
+          console.error('[AudioRecorder] ❌ No audio track found in stream!');
+        }
+        // CRITICAL FIX: Create a fresh audio context with proper sample rate
+        // Note: Most browsers don't support 16kHz natively, so we'll use the default and resample
+        this.audioContext = await audioContext({ id: 'audio-in' });
+
         // CRITICAL FIX: Validate audio context
         if (!this.audioContext) {
           throw new Error('Failed to create AudioContext');
         }
-        
-        console.log('[AudioRecorder] Audio context created, state:', this.audioContext.state);
+
+        console.log('[AudioRecorder] Audio context created:', {
+          state: this.audioContext.state,
+          sampleRate: this.audioContext.sampleRate,
+          targetRate: this.sampleRate
+        });
+
+        // Resume if suspended
+        if (this.audioContext.state === 'suspended') {
+          await this.audioContext.resume();
+          console.log('[AudioRecorder] Resumed suspended AudioContext');
+        }
         
         this.source = this.audioContext.createMediaStreamSource(this.stream);
         console.log('[AudioRecorder] Media stream source created successfully');
@@ -97,17 +150,42 @@ export class AudioRecorder {
         workletName
       );
 
+      console.log('[AudioRecorder] Recording worklet created, connecting to source...');
+
+      let dataEventCount = 0;
       this.recordingWorklet.port.onmessage = async (ev: MessageEvent) => {
         // Worklet processes recording floats and messages converted buffer
         const arrayBuffer = ev.data.data.int16arrayBuffer;
 
         if (arrayBuffer) {
+          dataEventCount++;
           const arrayBufferString = arrayBufferToBase64(arrayBuffer);
+
+          // Debug first few chunks
+          if (dataEventCount <= 5) {
+            // Check if the buffer contains actual audio
+            const int16Array = new Int16Array(arrayBuffer);
+            let maxValue = 0;
+            for (let i = 0; i < int16Array.length; i++) {
+              maxValue = Math.max(maxValue, Math.abs(int16Array[i]));
+            }
+            console.log('[AudioRecorder] Data event #' + dataEventCount, {
+              bufferSize: arrayBuffer.byteLength,
+              maxValue: maxValue,
+              base64Preview: arrayBufferString.substring(0, 50),
+              firstSamples: Array.from(int16Array.slice(0, 10))
+            });
+          }
+
           // FIX: Changed this.emit to this.emitter.emit
           this.emitter.emit('data', arrayBufferString);
         }
       };
       this.source.connect(this.recordingWorklet);
+      console.log('[AudioRecorder] Connected source to recording worklet');
+
+      // CRITICAL: Send a test message to verify the worklet is responding
+      this.recordingWorklet.port.postMessage({ type: 'ping' });
 
       // vu meter worklet
       const vuWorkletName = 'vu-meter';
@@ -115,7 +193,19 @@ export class AudioRecorder {
         createWorketFromSrc(vuWorkletName, VolMeterWorket)
       );
       this.vuWorklet = new AudioWorkletNode(this.audioContext, vuWorkletName);
+      let volumeEventCount = 0;
       this.vuWorklet.port.onmessage = (ev: MessageEvent) => {
+        volumeEventCount++;
+        const volume = ev.data.volume;
+
+        // Log first few volume events and then periodically
+        if (volumeEventCount <= 5 || volumeEventCount % 100 === 0) {
+          console.log('[AudioRecorder] Volume event #' + volumeEventCount, {
+            volume: volume,
+            isLoud: volume > 0.01 ? '🔊 SOUND DETECTED!' : '🔇 silence'
+          });
+        }
+
         // FIX: Changed this.emit to this.emitter.emit
         this.emitter.emit('volume', ev.data.volume);
       };
@@ -123,24 +213,49 @@ export class AudioRecorder {
       this.source.connect(this.vuWorklet);
       this.recording = true;
       resolve();
+    }).finally(() => {
+      // Ensure starting flag is reset on success or failure
       this.starting = null;
     });
+    return this.starting;
   }
 
   stop() {
-    // It is plausible that stop would be called before start completes,
-    // such as if the Websocket immediately hangs up
+    if (!this.recording && !this.starting) {
+      return;
+    }
+    console.log('[AudioRecorder] Stopping...');
+
     const handleStop = () => {
       this.source?.disconnect();
       this.stream?.getTracks().forEach(track => track.stop());
+      this.recordingWorklet?.disconnect();
+      this.vuWorklet?.disconnect();
+
       this.stream = undefined;
+      this.source = undefined;
       this.recordingWorklet = undefined;
       this.vuWorklet = undefined;
+
+      // CRITICAL FIX: Reset recording state
+      this.recording = false; 
+      console.log('[AudioRecorder] Stopped.');
     };
+
     if (this.starting) {
-      this.starting.then(handleStop);
-      return;
+      console.log('[AudioRecorder] Stop called while start was in progress. Will stop after start completes.');
+      this.starting.then(handleStop).catch(handleStop);
+    } else {
+      handleStop();
     }
-    handleStop();
+  }
+
+  async destroy() {
+    this.stop();
+    if (this.audioContext && this.audioContext.state !== 'closed') {
+      console.log('[AudioRecorder] Closing AudioContext.');
+      await this.audioContext.close();
+      this.audioContext = undefined;
+    }
   }
 }

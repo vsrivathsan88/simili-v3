@@ -1,5 +1,17 @@
 ---
-description:
-globs:
-alwaysApply: true
+name: Quality – Logging & Dev Hints
+description: Structured logs and reproducible bug reports; minimal tests where feasible.
+globs: ["src/**/*"]
+priority: 3
 ---
+
+# Logging
+- Use a tiny logger util: `debug/info/warn/error` with module tags.
+- Log WS lifecycle, frame counts, and VAD decisions at `debug` (dev only).
+
+# Error boundaries
+- One app-level error boundary; show a friendly “Reload session” with state reset.
+
+# Dev toggles
+- `?debugAudio=1` → draw waveform + RMS meter overlay.
+- `?mockTools=1` → intercept tool calls with fixtures.

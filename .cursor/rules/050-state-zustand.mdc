@@ -1,5 +1,15 @@
 ---
-description:
-globs:
-alwaysApply: true
+name: State – Zustand Slices
+description: Use slice pattern, tiny selectors with shallow compare; persist only non-sensitive UI prefs.
+globs: ["src/state/**/*", "src/**/*.tsx"]
+priority: 2
 ---
+
+# Pattern
+- Create slices: `uiSlice`, `liveSlice`, `audioSlice`, `historySlice`.
+- Export hooks with **narrow selectors**: `useStore(s => s.connectionStatus, shallow)`.
+- Do not persist conversation content by default; add an explicit export if needed.
+
+# Anti-patterns
+- No global objects (window.*) for state.
+- Avoid selecting entire store in components.

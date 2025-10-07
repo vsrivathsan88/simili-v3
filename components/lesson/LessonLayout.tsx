@@ -7,10 +7,11 @@ import React, { useState, useEffect } from 'react';
 import { Tldraw } from 'tldraw';
 import 'tldraw/tldraw.css';
 import './LessonLayout.css';
-import { useLiveAPIContext } from '../../contexts/LiveAPIContext';
+import { useLiveAPIContext } from '../../hooks/media/use-live-api-context';
 import { useSettings, useTools, useLogStore, useSceneStore, useMilestoneStore, Scene } from '@/lib/state';
 import { Modality } from '@google/genai';
 import { MessageCircle, X, Mic, Diamond, Circle, Shield } from 'lucide-react';
+import AvatarControlTray from './AvatarControlTray';
 
 // Screen sharing is now handled by ScreenRecorder in AvatarControlTray
 
@@ -70,7 +71,7 @@ export default function LessonLayout({ onSceneChange }: LessonLayoutProps) {
         ],
       }));
 
-    // Build dynamic system prompt with current scene context
+    // Use the full system prompt from settings
     let dynamicSystemPrompt = systemPrompt;
     
     if (currentScene) {
@@ -114,22 +115,32 @@ ${currentScene.targets_misconceptions && currentScene.targets_misconceptions.len
             voiceName: voice,
           },
         },
+        // CRITICAL: Force English language for speech output
+        languageCode: 'en-US',
       },
-      // CRITICAL FIX: Enable realtime input processing for audio transcription
+      // Enable VAD with optimized settings
       realtimeInputConfig: {
         automaticActivityDetection: {
-          enabled: true,
+          enabled: true, // Enable automatic speech detection
+          speechStartThreshold: 0.5, // Default sensitivity
+          voiceActivityTimeout: 2000, // Default timeout (2 seconds)
         },
       },
-      // Enable audio input/output transcription
-      inputAudioTranscription: {},
-      outputAudioTranscription: {},
+      // CRITICAL: Force English transcription for input and output
+      inputAudioTranscription: {
+        languageCode: 'en-US',
+      },
+      outputAudioTranscription: {
+        languageCode: 'en-US',
+      },
       systemInstruction: {
         parts: [{ text: dynamicSystemPrompt }],
       },
       tools: enabledTools,
     };
 
+    console.log('[LessonLayout] Setting config with system prompt length:', dynamicSystemPrompt.length);
+    console.log('[LessonLayout] System prompt preview:', dynamicSystemPrompt.substring(0, 200) + '...');
     setConfig(config);
   }, [setConfig, systemPrompt, tools, voice, currentScene]);
 
@@ -303,6 +314,9 @@ ${currentScene.targets_misconceptions && currentScene.targets_misconceptions.len
           )}
         </div>
       </aside>
+
+      {/* Audio Control Tray - Fixed at bottom */}
+      <AvatarControlTray />
     </div>
   );
 }

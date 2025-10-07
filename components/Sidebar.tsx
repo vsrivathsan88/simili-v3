@@ -5,8 +5,9 @@
 import { FunctionCall, useSettings, useUI, useTools } from '@/lib/state';
 import c from 'classnames';
 import { DEFAULT_LIVE_API_MODEL, AVAILABLE_VOICES } from '@/lib/constants';
-import { useLiveAPIContext } from '@/contexts/LiveAPIContext';
-import { useState } from 'react';
+import React, { useState } from 'react';
+
+import { useLiveAPIContext } from '../hooks/media/use-live-api-context';
 import ToolEditorModal from './ToolEditorModal';
 
 const AVAILABLE_MODELS = [
